@@ -12,7 +12,7 @@ echo "$bar$bar"
 
 # root paths -----------------------------------------------------------
 ROOT_PATH=$HOME
-ROOT_DIRS=(anx bin etc ref sec shr tmp wrk var DEV)
+ROOT_DIRS=(anx bin etc ref sec shr tmp wrk var)
 
 WORK_REPOS="
 solarized
