@@ -174,9 +174,7 @@ reup https://github.com/robbyrussell/oh-my-zsh.git $ROOT_PATH/.oh-my-zsh
 conlog "STAGE: Conforming directories..."
 
 # core -----------------------------------------------------------------
-_IFS=$IFS; IFS=","
-eval dirup $ROOT_PATH/{"${ROOT_DIRS[*]}"}
-IFS=$_IFS
+for rootdir in ${!PATH_*}; do dirup ${!rootdir}; done
 
 # mail, contacts, calendar ---------------------------------------------
 # TODO: what am I using temp for here?
