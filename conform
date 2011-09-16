@@ -297,8 +297,7 @@ do
 	fi
 done
 echo "$bar$bar"
-listitems="CLUTTER_FILES CLUTTER_LINKS CLUTTER_DIRS CLUTTER_UNKOWN"
-for listname in $listitems; do
+for listname in ${!CLUTTER_*}; do
 istrue $CLEAN \
 	&& for item in ${!listname}; do trash $item; done \
 	|| ([[ -n ${!listname} ]] && echo "$listname: ${!listname}")
