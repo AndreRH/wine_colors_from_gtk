@@ -22,7 +22,7 @@ vim-colors-solarized
 vim-pandoc-kit
 "
 # directories to append to paths ---------------------------------------
-WHITE_LIST=".oh-my-zsh" # won't be deleted
+WHITE_LIST=".oh-my-zsh" # won't be deleted (-f/-F don't touch these)
 GREY_LIST=".cache .config .local" # -F will delete these; -f won't
 # TODO: reassign XDG env variables and then get rid of these
 
@@ -155,10 +155,10 @@ conlog "STAGE: Conforming repositories..."
 
 # core repos -----------------------------------------------------------
 #reup git@github.com:altercation/es-anx.git $PATH_ANX
+#reup git@github.com:altercation/es-dotfiles.git $PATH_ETC
 reup git@github.com:altercation/es-bin.git $PATH_BIN
-#reup git@github.com:altercation/es-etc.git $PATH_ETC
-reup git@github.com:altercation/es-dotfiles.git $PATH_ETC
-#reup git@github.com:altercation/es-sec.git $PATH_SEC
+reup git@github.com:altercation/es-etc.git $PATH_ETC
+reup git@github.com:altercation/es-sec.git $PATH_SEC
 
 # work repos -----------------------------------------------------------
 for r in $WORK_REPOS
@@ -247,7 +247,7 @@ lnup $PATH_ETC/shell/profile		.zprofile
 
 # fonts ----------------------------------------------------------------
 # TODO: move this into sec
-lnup $PATH_ETC/fonts			.fonts
+lnup $PATH_SEC/fonts			.fonts
 
 # misc apps ------------------------------------------------------------
 lnup $PATH_ETC/xorg/gromit-mpx.cfg	.gromit-mpx.cfg

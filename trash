@@ -1,0 +1,40 @@
+#!/bin/bash
+
+
+# ======================================================================
+# FUNCTIONS
+# ======================================================================
+
+log () { local report="TRASH $*"; logger $report; echo "$report"; }
+
+istrue ()
+{
+shopt -s nocasematch; case $1 in 1|yes|true) return 0 ;; *) return 1 ;;
+esac; shopt -u nocasematch;
+}
+
+# ======================================================================
+# DEFAULTS & PARAMETERS
+# ======================================================================
+
+# trash directories ----------------------------------------------------
+TEMP_SCREENSHOTS=$HOME/tmp/screenshots
+TEMP_DOWNLOADS=$HOME/tmp/downloads
+TEMP_TRASH=$HOME/tmp/trash
+
+# default option values ------------------------------------------------
+TOTAL= ;
+
+# process opts ---------------------------------------------------------
+while getopts ":F" option
+do case $option in F) TOTAL=1 ;; esac; done
+
+
+# ======================================================================
+# HOUSEKEEPING
+# ======================================================================
+
+istrue $TOTAL \ && trash_list="${!TEMP_*}" || trash_list="TEMP_TRASH"
+for t in $trash_list; do
+    rm -rf ${!t} && mkdir -p ${!t} && log "OK: ${!t} emptied"
+done

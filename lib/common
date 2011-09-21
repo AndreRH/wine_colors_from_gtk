@@ -1,0 +1,58 @@
+#!/bin/bash
+
+HR="------------------------------------------------------------------------"
+
+truc () { echo -n "$*" | tr '[:lower:]' '[:upper:]'; }
+trlc () { echo -n "$*" | tr '[:upper:]' '[:lower:]'; }
+readoption () { n="option_${1#option_}"; local opt; for opt in $(eval echo -n \${!$n[@]}); do eval $(truc $opt)=\"\${$n[$opt]}\"; done; }
+usage ()
+{
+    echo $HR
+    local verbose= ; [[ -n $* ]] && verbose=true; echo "$CMD usage:"
+    local opt; for opt in ${!option_*}; do
+        [[ -n $verbose ]] && echo $HR
+        readoption $opt
+        local enc=""; [[ -z ${VALUE_IFSET##:*} ]] && enc=" <${VALUE_IFSET#:}>"; [[ -z ${VALUE_IFSET##::*} ]] && enc="=[${VALUE_IFSET#::}]"
+        #echo "-${KEY}${enc:1}, --${NAME}${enc}   ${USAGE_SUMMARY[$name]}"
+        echo "-${KEY}${enc} ${USAGE_SUMMARY[$name]}"
+        [[ -n $verbose ]] && echo -e "$HR\n${USAGE_DETAILS}\n"
+    done; [[ -z $verbose ]] && echo "--help    Show detailed help"
+    echo $HR
+}
+
+# dynamic option associative array declaration
+for opt in $(egrep '^\s*option_' $0 | sed 's/^\s*option_\(.*\)=(.*/\1 /'); do eval "declare -A option_$opt"; done
+declare -A key_list
+
+process_opts ()
+{
+for optname in ${!option_*};
+do readoption $optname; eval $optname[name]=${optname#option_}; key_list[$KEY]=$optname; key_list[$optname]=$optname; done
+
+# dynamic creation of getopts string from option arrays
+for opt in ${!option_*};
+do readoption $opt; suffix=""; [[ -z ${VALUE_IFSET##:*} ]] && suffix=":"; [[ -z ${VALUE_IFSET##::*} ]] && suffix="::"
+shortopts+="${KEY}${suffix}"; longopts+=",${NAME}${suffix}"; done
+
+# process options
+local arglist=
+for i in ${BASH_ARGV[@]}; do arglist="${i/#--/-} $arglist"; done
+set -- $arglist
+while getopts "h${shortopts}" opt
+do
+    readoption ${key_list[$opt]}
+    [[ $opt == "?" && $OPTARG =~ [h?] ]] && usage && exit 0
+    [[ $opt == "?" ]] && usage && exit 1
+    if [[ -z ${key_list[$opt]} ]];
+    then
+        usage && exit 1
+    elif [[ -z ${VALUE_IFSET##:*} ]];
+    then
+        eval "$optname[value_state]=$OPTARG";
+    else
+        eval "$optname[value_state]=${VALUE_IFSET##:}";
+    fi
+done
+shift $(($OPTIND -1)) # return remaining command line arguments
+#echo "REMAINING: $*"
+}

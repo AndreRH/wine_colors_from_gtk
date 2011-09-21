@@ -1,0 +1,72 @@
+#!/bin/bash
+
+#system
+# |
+# +--overlays (or just listed in a profile along with post run procedures)
+# +--overlays.d
+# +--packages
+
+CMD=$(basename $0)
+. $(dirname $0)/lib/common
+
+option_update=(
+[key]="u"
+[value_state]="false"
+[value_ifset]="true"
+[report_default]="non-update mode; $CMD will work on live system files"
+[report_ifset]="update mode; $CMD will work on snapshot config files"
+[usage_summary]="Update configuration files in config directory."
+)
+option_config_path=(
+[key]="c"
+[value_state]="$XDG_CONFIG_HOME/$CMD/$HOSTNAME"
+[value_ifset]=":path"
+[report_default]="default config path used"
+[report_ifset]="custom config path set"
+[usage_summary]="Set custom config directory path. Default for this system is $XDG_CONFIG_HOME/$CMD/$HOSTNAME"
+)
+process_opts
+
+# list of groups to be installed on system
+package_groups="base base-devel"
+
+# dump list of explicitly installed packages (both official repos and AUR)
+current_all=$(pacman -Qeq)
+current_aur=$(pacman -Qmq)
+current_groups=$(pacman -Qgq $package_groups | sort)
+current_official=$(comm -23 <(echo "$current_all") <(echo "$current_aur"))
+current_official_nogroups=$(comm -23 <(echo "$current_official") <(echo "$current_groups"))
+
+# check current groups against repo group package list; there are ways to do 
+# this without maintaining an explicit list of groups ($package_groups above) 
+# but they are more complex and I have to maintain a list of groups to install 
+# in any case
+declare -A group_missing
+declare -A group_removed
+for group in $package_groups
+do
+    group_missing[$group]= ; group_removed[$group]=
+    group_repo="$(pacman -Sgq $group | sort | uniq )"; group_local="$(pacman -Qgq $group | sort | uniq )"
+    group_missing[$group]=$(comm -23 <(echo "$group_repo") <(echo "$group_local"))
+    group_removed[$group]=$(comm -23 <(echo "$group_local") <(echo "$group_repo"))
+    [[ -n ${group_missing[$group]} ]] && echo $group group has new packages that can be installed: ${group_missing[$group]}
+    [[ -n ${group_removed[$group]} ]] && echo $group group has removed packages\; the following can be removed locally: ${group_missing[$group]}
+done
+
+# dump list of AUR only packages
+# dump list of unqiue packages less AUR
+# dump list of unique packages less base, base-devel
+# capture overlay files (possible sanitization of certain files?)
+
+# thus
+
+# install base, base-devel
+# install yaourt
+# install unique packages & AUR packages
+
+# get list of managed config files
+# update config files (git or other)
+# reinstall config files
+
+# final regen of any required files (mkinicpio, grub2, etc.)
+
