@@ -6,7 +6,17 @@
 # +--overlays.d
 # +--packages
 
+# TODO: consolidate into a single profile file
+# rename overlays.d to just overlay
+# need a custom function in the profile?
+
+#system
+# |
+# +--overlay
+# +--profile
+
 CMD=$(basename $0)
+TEMP_PATH=/tmp/$CMD
 . $(dirname $0)/lib/common
 
 option_update=(
@@ -25,17 +35,56 @@ option_config_path=(
 [report_ifset]="custom config path set"
 [usage_summary]="Set custom config directory path. Default for this system is $XDG_CONFIG_HOME/$CMD/$HOSTNAME"
 )
+option_backup=(
+[key]="b"
+[value_state]="false"
+[value_ifset]="true"
+[report_default]="backups off; files will be overwritten"
+[report_ifset]="backups on; files will be saved in place with backup suffix"
+[usage_summary]="Backup files when copying new file to existing path."
+)
+option_force=(
+[key]="F"
+[value_state]="false"
+[value_ifset]="true"
+[report_default]="force off; live system files will not be overwritten, regardless of backup option setting"
+[report_ifset]="force on; live system files *will* be overwritten. Use this with backup."
+[usage_summary]="Force overwrite system files with sysform overlay files. Should be used with the backup option."
+)
+option_gitupdate=(
+[key]="g"
+[value_state]="false"
+[value_ifset]="true"
+[report_default]="git update off; no git push after config update"
+[report_ifset]="git update on; git push will occur after config update"
+[usage_summary]="Git update; if sysform config directory being updated is a git repository, an automated git add, commit, and push will occur."
+)
 process_opts
 
+# config directory
+if [[ ! -d "$CONFIG_PATH" ]]
+then
+    if istrue $UPDATE
+    then
+        mkdir -p "$CONFIG_PATH/overlays.d"
+    else
+        echo "No config directory present; run again in update mode to automatically create it at $CONFIG_PATH."
+        usage
+        exit 0
+    fi
+fi
+
 # list of groups to be installed on system
-package_groups="base base-devel"
+# TODO: DON'T USE THIS
+#current_groups="base
+#base-devel"
 
 # dump list of explicitly installed packages (both official repos and AUR)
 current_all=$(pacman -Qeq)
 current_aur=$(pacman -Qmq)
-current_groups=$(pacman -Qgq $package_groups | sort)
+current_grouped=$(pacman -Qgq $package_groups | sort)
 current_official=$(comm -23 <(echo "$current_all") <(echo "$current_aur"))
-current_official_nogroups=$(comm -23 <(echo "$current_official") <(echo "$current_groups"))
+current_nogroups=$(comm -23 <(echo "$current_official") <(echo "$current_grouped"))
 
 # check current groups against repo group package list; there are ways to do 
 # this without maintaining an explicit list of groups ($package_groups above) 
@@ -52,21 +101,46 @@ do
     [[ -n ${group_missing[$group]} ]] && echo $group group has new packages that can be installed: ${group_missing[$group]}
     [[ -n ${group_removed[$group]} ]] && echo $group group has removed packages\; the following can be removed locally: ${group_missing[$group]}
 done
+overlays="$(readfile_nocomments $CONFIG_PATH/overlays)"
+echo "OVERLAYS:"
+echo "$overlays"
+exit
 
-# dump list of AUR only packages
-# dump list of unqiue packages less AUR
-# dump list of unique packages less base, base-devel
-# capture overlay files (possible sanitization of certain files?)
+$(istrue $BACKUP) && backup_mode="simple" || backup_mode="none"
+if istrue $UPDATE
+then
+    rm -rf $TEMP_PATH; mkdir $TEMP_PATH
+    for filename in groups packages_nogroups packages_aur overlays
+    do
+        eval echo \"\$current_${filename#packages_}\" >> $TEMP_PATH/$filename
+        eval "install -D --backup=$backup_mode --suffix=\"-$(date +%F-%s)\" \"$TEMP_PATH/$filename\" \"$CONFIG_PATH/$filename\" && rm $TEMP_PATH/$filename"
+    done
+    for filename in $overlays
+    do
+        #TODO: stat -c '%a %U %G'
+        #TODO: add a sanitize config name(s) to take a dummy value
+        [[ -d "$filename" ]] && opt="dD" || opt="D"
+        eval "install -$opt --backup=$backup_mode --suffix=\"-$(date +%F-%s)\" \"$filename\" \"$CONFIG_PATH/overlays.d/${filename#/}\""
+    done
+else
+    for filename in groups packages_nogroups packages_aur overlays
+    do
+        eval "$filename=\$(readfile_nocomments $CONFIG_PATH/$filename)"
+        if [[ $? > 0 ]]
+        then
+            echo "failed to read file $CONFIG_PATH/$filename"
+            echo "run sysconform again in update mode to write out initial config files"
+            usage
+            exit 1
+        fi
+    done
+    # overlays
+fi
 
-# thus
-
-# install base, base-devel
 # install yaourt
-# install unique packages & AUR packages
 
-# get list of managed config files
-# update config files (git or other)
 # reinstall config files
 
 # final regen of any required files (mkinicpio, grub2, etc.)
 
+# git commit & push on update? -g option?

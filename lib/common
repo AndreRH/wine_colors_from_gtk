@@ -4,7 +4,9 @@ HR="------------------------------------------------------------------------"
 
 truc () { echo -n "$*" | tr '[:lower:]' '[:upper:]'; }
 trlc () { echo -n "$*" | tr '[:upper:]' '[:lower:]'; }
+istrue () { case $(trlc $1) in true|yes|1|y|set) return 0 ;; *) return 1 ;; esac; }
 readoption () { n="option_${1#option_}"; local opt; for opt in $(eval echo -n \${!$n[@]}); do eval $(truc $opt)=\"\${$n[$opt]}\"; done; }
+readfile_nocomments () { cat $1 | egrep "^\s*[^#]"; }
 usage ()
 {
     echo $HR
@@ -55,4 +57,7 @@ do
 done
 shift $(($OPTIND -1)) # return remaining command line arguments
 #echo "REMAINING: $*"
+
+# assign state to new option variable
+for opt in ${!option_*}; do readoption $opt; eval "$(truc ${opt#option_})=\"$VALUE_STATE\""; done;
 }
