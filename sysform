@@ -15,98 +15,245 @@
 # +--overlay
 # +--profile
 
+# ----------------------------------------------------------------------
+# DEFAULTS
+# ----------------------------------------------------------------------
 CMD=$(basename $0)
 TEMP_PATH=/tmp/$CMD
+CONFIG_FILENAME=profile
+OVERLAY_DIRNAME=overlay
+DEFAULT_CONFIG_PATH="$XDG_CONFIG_HOME/$CMD/$HOSTNAME"
 . $(dirname $0)/lib/common
 
-option_update=(
-[key]="u"
+# ----------------------------------------------------------------------
+# DECLARATIONS
+# ----------------------------------------------------------------------
+declare -A groups
+declare -A packages_official_grouped_missing
+declare -A packages_official_grouped_removed
+declare -A packages_official_nogroups
+declare -A packages_aur_nodeps
+declare -A overlay_files
+
+# ----------------------------------------------------------------------
+# COMMAND LINE OPTIONS, RUNTIME OPTION REPORT VALUES & HELP
+# ----------------------------------------------------------------------
+option_config_update=(
+[key]="c"
 [value_state]="false"
 [value_ifset]="true"
-[report_default]="non-update mode; $CMD will work on live system files"
-[report_ifset]="update mode; $CMD will work on snapshot config files"
-[usage_summary]="Update configuration files in config directory."
+[report]="running in report only mode (will report difference between system and config)"
+[report_ifset]="update mode; $CMD will update config files (use with backup to preserve existing overlay files)"
+[usage_summary]="Update configuration files in config directory. Can be used in conjunction with the backup option"
 )
 option_config_path=(
-[key]="c"
-[value_state]="$XDG_CONFIG_HOME/$CMD/$HOSTNAME"
+[key]="p"
+[value_state]="$DEFAULT_CONFIG_PATH"
 [value_ifset]=":path"
-[report_default]="default config path used"
+[report]="default config path used"
 [report_ifset]="custom config path set"
-[usage_summary]="Set custom config directory path. Default for this system is $XDG_CONFIG_HOME/$CMD/$HOSTNAME"
+[usage_summary]="Set custom config *directory* path. Default for this system is $DEFAULT_CONFIG_PATH"
 )
 option_backup=(
 [key]="b"
 [value_state]="false"
 [value_ifset]="true"
-[report_default]="backups off; files will be overwritten"
+[report]="backups off; files will be overwritten"
 [report_ifset]="backups on; files will be saved in place with backup suffix"
 [usage_summary]="Backup files when copying new file to existing path."
 )
-option_force=(
-[key]="F"
+option_system_update=(
+[key]="s"
 [value_state]="false"
 [value_ifset]="true"
-[report_default]="force off; live system files will not be overwritten, regardless of backup option setting"
-[report_ifset]="force on; live system files *will* be overwritten. Use this with backup."
-[usage_summary]="Force overwrite system files with sysform overlay files. Should be used with the backup option."
+[report]="system file conform off; no live system files will be written to during this procedure."
+[report_ifset]="system file conform on; live system files *will* be overwritten, recommend using this with the backup option."
+[usage_summary]="Update system files with current sysform config overlay files. Should be used with the backup option if you want to preserve existing files."
+)
+option_force=(
+[key]="f"
+[value_state]="false"
+[value_ifset]="true"
+[report]="force mode off; queries will be presented prior to file write operations."
+[report_ifset]="force mode on; no queries will be presented; CAUTION"
+[usage_summary]="Force all write operations; no queries will be given, use with caution and consider use of the backup option. Applies to both config and system updates."
 )
 option_gitupdate=(
 [key]="g"
 [value_state]="false"
 [value_ifset]="true"
-[report_default]="git update off; no git push after config update"
+[report]="git update off; no git push after config update"
 [report_ifset]="git update on; git push will occur after config update"
 [usage_summary]="Git update; if sysform config directory being updated is a git repository, an automated git add, commit, and push will occur."
 )
-process_opts
 
+# ----------------------------------------------------------------------
+# PROCESS OPTIONS
+# ----------------------------------------------------------------------
+process_opts
+$(istrue $BACKUP) && backup_mode="simple" || backup_mode="none"
+
+# ----------------------------------------------------------------------
+# CHECK OVERLAYS
+# ----------------------------------------------------------------------
+#overlays="$(readfile_nocomments $CONFIG_PATH/overlays)"
+overlay () { read -r -d '' overlay_files[file]; }
+parse_overlay ()
+{
+DEFAULT_PERMISSIONS=644
+DEFAULT_USER=root
+DEFAULT_GROUP=root
+i=0
+_IFS=$IFS
+IFS=$'\n'
+#while read line
+for line in ${overlay_files[file]}
+do
+    echo "LINE IS $line"
+    i=$((i+1))
+    local _path=$(echo -n $line | awk '{print $1}')
+    local _permissions=$(echo -n $line | awk '{print $2}')
+    local _user=$(echo -n $line | awk '{print $3}')
+    local _group=$(echo -n $line | awk '{print $4}')
+    if [[ -z $_permissions ]]
+    then
+        if [[ -e $_path ]]
+        then
+            _permissions=$(stat -c '%a' $_path)
+            _user=$(stat -c '%U' $_path)
+            _group=$(stat -c '%G' $_path)
+        else
+            _permissions=$DEFAULT_PERMISSIONS
+            _user=$DEFAULT_USER
+            _group=$DEFAULT_GROUP
+        fi
+    fi
+    #echo "_vars: $_path $_permissions $_user $_group"
+    eval declare -A overlay_file_$i
+    eval overlay_file_$i[path]=\$_path
+    eval overlay_file_$i[permissions]=\$_permissions
+    eval overlay_file_$i[user]=\$_user
+    eval overlay_file_$i[group]=\$_group
+
+    if istrue $CONFIG_UPDATE
+    then
+        #record new overlay write values
+        overlay_files[writeout]+="$_path $_permissions $_user $_group\n"
+        :
+    elif istrue $SYSTEM_UPDATE
+    then
+        #write system
+        #eval "install -D --backup=$backup_mod0e --suffix=\"-$(date +%F-%s)\" \"$TEMP_PATH/$filename\" \"$CONFIG_PATH/$filename\" && rm $TEMP_PATH/$filename"
+        :
+    else
+        #report
+        eval echo \"LINE#$i:\${overlay_file_$i[path]} \${overlay_file_$i[permissions]} \${overlay_file_$i[user]} \${overlay_file_$i[group]}\"
+    fi
+done
+OVERLAY_COUNT=$i
+IFS=$_IFS
+}
+
+overlay <<EOF
+/boot/grub/menu.lst
+/etc/acpi/handler.sh
+/etc/rc.conf
+/etc/rc.local
+/etc/modprobe.d/modprobe.conf
+/etc/wpa_supplicant.conf
+EOF
+
+parse_overlay
+
+echo "HERE"
+echo "${overlay_files[file]}"
+
+echo "HERE"
+echo "${overlay_files[writeout]}"
+
+exit
+
+# ----------------------------------------------------------------------
+# CONFIG DIRECTORY & FILE
+# ----------------------------------------------------------------------
 # config directory
 if [[ ! -d "$CONFIG_PATH" ]]
 then
-    if istrue $UPDATE
-    then
-        mkdir -p "$CONFIG_PATH/overlays.d"
+    if istrue $UPDATE; then
+        mkdir -p "$CONFIG_PATH"
     else
         echo "No config directory present; run again in update mode to automatically create it at $CONFIG_PATH."
         usage
         exit 0
     fi
 fi
+# config file
+[[ -f "$CONFIG_PATH/$CONFIG_FILENAME" ]] && source "$CONFIG_PATH/$CONFIG_FILENAME"
 
-# list of groups to be installed on system
-# TODO: DON'T USE THIS
-#current_groups="base
-#base-devel"
-
-# dump list of explicitly installed packages (both official repos and AUR)
-current_all=$(pacman -Qeq)
-current_aur=$(pacman -Qmq)
-current_grouped=$(pacman -Qgq $package_groups | sort)
-current_official=$(comm -23 <(echo "$current_all") <(echo "$current_aur"))
-current_nogroups=$(comm -23 <(echo "$current_official") <(echo "$current_grouped"))
-
-# check current groups against repo group package list; there are ways to do 
-# this without maintaining an explicit list of groups ($package_groups above) 
-# but they are more complex and I have to maintain a list of groups to install 
-# in any case
-declare -A group_missing
-declare -A group_removed
-for group in $package_groups
+# ----------------------------------------------------------------------
+# IDENTIFY INSTALLED GROUPS
+# ----------------------------------------------------------------------
+groups[potential]=$(pacman -Qg | awk '{print $1}' | sort | uniq)
+echo "Detecting installed groups..."
+for groupname in ${groups[potential]}
 do
-    group_missing[$group]= ; group_removed[$group]=
-    group_repo="$(pacman -Sgq $group | sort | uniq )"; group_local="$(pacman -Qgq $group | sort | uniq )"
-    group_missing[$group]=$(comm -23 <(echo "$group_repo") <(echo "$group_local"))
-    group_removed[$group]=$(comm -23 <(echo "$group_local") <(echo "$group_repo"))
-    [[ -n ${group_missing[$group]} ]] && echo $group group has new packages that can be installed: ${group_missing[$group]}
-    [[ -n ${group_removed[$group]} ]] && echo $group group has removed packages\; the following can be removed locally: ${group_missing[$group]}
+    # get percentage of group already installed
+    # sort and uniq are required as there can be duplicate package reporting if 
+    # testing repos are live, for instance
+    echo -n "Checking $groupname: "
+    count_local=$(pacman -Qgq $groupname | sort | uniq | wc -l)
+    count_repo=$(pacman -Sgq $groupname | sort | uniq | wc -l)
+    threshold=12
+    score=$(echo $((($count_repo*10)/$count_local)))
+    echo -n "$count_local of $count_repo installed "
+    if [[ $score -le $threshold ]]
+    then
+        groups[detected]+="$groupname "
+        echo "(scored $score; marked INSTALLED)"
+    else
+        echo "(scored $score)"
+    fi
 done
-overlays="$(readfile_nocomments $CONFIG_PATH/overlays)"
+echo "Groups detected: ${groups[detected]}"
+groups[live]="${groups[detected]}"
+
+# ----------------------------------------------------------------------
+# GET STATE OF GROUPS
+# ----------------------------------------------------------------------
+# group check
+echo -en "$HR\nPackage groups installed: "
+echo ${groups[live]} 
+echo
+for groupname in ${groups[live]}
+do
+    grouprepo="$(pacman -Sgq $groupname)"; grouplocal="$(pacman -Qgq $groupname)"
+    packages_official_grouped_missing[$groupname]=$(compare "$grouprepo" "$grouplocal")
+    packages_official_grouped_removed[$groupname]=$(compare "$grouplocal" "$grouprepo")
+    [[ -n ${packages_official_grouped_missing[$groupname]} ]] \
+        && echo $groupname group has new packages that can be installed: ${packages_official_grouped_missing[$groupname]}
+    [[ -n ${packages_official_grouped_removed[$groupname]} ]] \
+        && echo $groupname group has removed packages\; the following can be removed locally: ${packages_official_grouped_removed[$groupname]}
+    [[ -z ${packages_official_grouped_missing[$groupname]} && -z ${packages_official_grouped_removed[$groupname]} ]] \
+        && echo $groupname is up to date
+done
+
+# ----------------------------------------------------------------------
+# IDENTIFY EXPLICITLY INSTALLED PACKAGES
+# ----------------------------------------------------------------------
+packages_official_nogroups[live]="$(compare "$(compare "$(pacman -Qeq)" "$(pacman -Qmq)")" "$(pacman -Qgq ${groups[live]})")"
+packages_aur_nodeps[live]="$(common "$(pacman -Qeq)" "$(pacman -Qmq)")"
+echo -e "$HR\nOfficial packages explicitly installed on current system (no group packages):\n"
+echo ${packages_official_nogroups[live]}
+echo -e "$HR\nAUR packages explicitly installed on current system (no AUR dependencies)\n"
+echo ${packages_aur_nodeps[live]}
+
+
+exit
+
 echo "OVERLAYS:"
 echo "$overlays"
 exit
 
-$(istrue $BACKUP) && backup_mode="simple" || backup_mode="none"
 if istrue $UPDATE
 then
     rm -rf $TEMP_PATH; mkdir $TEMP_PATH

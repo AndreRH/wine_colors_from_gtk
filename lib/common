@@ -5,8 +5,10 @@ HR="------------------------------------------------------------------------"
 truc () { echo -n "$*" | tr '[:lower:]' '[:upper:]'; }
 trlc () { echo -n "$*" | tr '[:upper:]' '[:lower:]'; }
 istrue () { case $(trlc $1) in true|yes|1|y|set) return 0 ;; *) return 1 ;; esac; }
+compare () { echo "$(comm -23 <(echo "${1}" | sort | uniq) <(echo "${2}" | sort | uniq))"; }
+common () { echo "$(comm -12 <(echo "${1}" | sort | uniq) <(echo "${2}" | sort | uniq))"; }
 readoption () { n="option_${1#option_}"; local opt; for opt in $(eval echo -n \${!$n[@]}); do eval $(truc $opt)=\"\${$n[$opt]}\"; done; }
-readfile_nocomments () { cat $1 | egrep "^\s*[^#]"; }
+readfile_nocomments () { [[ -e $1 ]] && cat $1 | egrep "^\s*[^#]"; }
 usage ()
 {
     echo $HR
@@ -28,36 +30,57 @@ declare -A key_list
 
 process_opts ()
 {
+# create key_list to reference option names from command line switches (inc.  
 for optname in ${!option_*};
-do readoption $optname; eval $optname[name]=${optname#option_}; key_list[$KEY]=$optname; key_list[$optname]=$optname; done
+do
+    readoption $optname;
+    eval $optname[name]=${optname#option_}; key_list[$KEY]=$optname;
+    eval "$optname[parens]=\"()\"" # used in report phase
+done
 
 # dynamic creation of getopts string from option arrays
 for opt in ${!option_*};
 do readoption $opt; suffix=""; [[ -z ${VALUE_IFSET##:*} ]] && suffix=":"; [[ -z ${VALUE_IFSET##::*} ]] && suffix="::"
 shortopts+="${KEY}${suffix}"; longopts+=",${NAME}${suffix}"; done
 
-# process options
+# get command line arguments using BASH_ARGV
 local arglist=
 for i in ${BASH_ARGV[@]}; do arglist="${i/#--/-} $arglist"; done
 set -- $arglist
+
+# process options
 while getopts "h${shortopts}" opt
 do
-    readoption ${key_list[$opt]}
+    optname=${key_list[$opt]}
+    readoption $optname
     [[ $opt == "?" && $OPTARG =~ [h?] ]] && usage && exit 0
     [[ $opt == "?" ]] && usage && exit 1
-    if [[ -z ${key_list[$opt]} ]];
+    if [[ -n ${key_list[$opt]} ]];
     then
-        usage && exit 1
-    elif [[ -z ${VALUE_IFSET##:*} ]];
-    then
-        eval "$optname[value_state]=$OPTARG";
+        if [[ -z ${VALUE_IFSET##:*} ]];
+        then
+            eval "$optname[value_state]=$OPTARG";
+        else
+            eval "$optname[value_state]=${VALUE_IFSET##:}";
+        fi
+        eval "$optname[report]=\${$optname[report_ifset]}"
+        eval "$optname[parens]=\"  \"" # used in report phase
     else
-        eval "$optname[value_state]=${VALUE_IFSET##:}";
+        usage && exit 1
     fi
 done
 shift $(($OPTIND -1)) # return remaining command line arguments
 #echo "REMAINING: $*"
 
+# REPORT START/OPTIONS
+echo $HR
+echo $CMD
+echo $HR
 # assign state to new option variable
-for opt in ${!option_*}; do readoption $opt; eval "$(truc ${opt#option_})=\"$VALUE_STATE\""; done;
+for opt in ${!option_*};
+do
+    readoption $opt; eval "$(truc ${opt#option_})=\"$VALUE_STATE\"";
+    eval "echo \"\${$opt[parens]:0:1}-\${$opt[key]}\${$opt[parens]:1:1} \${$opt[report]}\""
+done
+echo $HR
 }
