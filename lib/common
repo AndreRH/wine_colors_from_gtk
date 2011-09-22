@@ -84,3 +84,9 @@ do
 done
 echo $HR
 }
+overlay () { read -r -d '' overlay_files[file]; }
+packages () { read -r -d '' _packages; for p in $_packages; do packages_official[file]+="$p
+"; done; }
+aur () { read -r -d '' _packages; for p in $_packages; do packages_aur[file]+="$p
+"; done; }
+regen () { echo "TODO: add mkinitcpio, grub regen here"; }
