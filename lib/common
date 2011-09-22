@@ -90,3 +90,6 @@ packages () { read -r -d '' _packages; for p in $_packages; do packages_official
 aur () { read -r -d '' _packages; for p in $_packages; do packages_aur[file]+="$p
 "; done; }
 regen () { echo "TODO: add mkinitcpio, grub regen here"; }
+declare -A REPORT
+report () { _category=$1; shift; REPORT[$_category]+="$*\n"; }
+log () { echo "$*"; logger "$CMD: $*"; }

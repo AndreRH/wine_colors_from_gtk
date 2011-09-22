@@ -20,12 +20,14 @@
 # ----------------------------------------------------------------------
 CMD=$(basename $0)
 TEMP_PATH=/tmp/$CMD
-CONFIG_FILENAME=profile
+CONFIG_FILENAME=config
 OVERLAY_FILENAME=overlay
 PACKAGES_FILENAME=packages
 AUR_FILENAME=aur
 OVERLAY_DIRNAME=overlay.d
 DEFAULT_CONFIG_PATH="$XDG_CONFIG_HOME/$CMD/$HOSTNAME"
+BACKUP_SUFFIX=".$CMD" #BACKUP_SUFFIX="$CMD-$(date +%F-%s)"
+BACKUP_MODE=simple
 . $(dirname $0)/lib/common
 
 # ----------------------------------------------------------------------
@@ -104,7 +106,7 @@ option_pacman_update=(
 # PROCESS OPTIONS
 # ----------------------------------------------------------------------
 process_opts
-$(istrue $BACKUP) && backup_mode="simple" || backup_mode="none"
+$(istrue $BACKUP) || BACKUP_MODE=none
 if istrue $CONFIG_UPDATE && istrue $SYSTEM_UPDATE
 then
     echo "Please select only one of -c / -s (config/system update)"
@@ -117,7 +119,7 @@ fi
 # config directory
 if [[ ! -d "$CONFIG_PATH" ]]
 then
-    if istrue $UPDATE; then
+    if istrue $CONFIG_UPDATE; then
         mkdir -p "$CONFIG_PATH"
     else
         echo "No config directory present; run again in update mode to automatically create it at $CONFIG_PATH."
@@ -131,43 +133,26 @@ fi
 # ----------------------------------------------------------------------
 # TEMP: "SOURCE" CONFIG
 # ----------------------------------------------------------------------
-overlay <<EOF
-/boot/grub/menu.lst
-/etc/acpi/handler.sh
-/etc/rc.conf
-/etc/rc.local
-/etc/modprobe.d/modprobe.conf
-/etc/wpa_supplicant.conf
-/etc/nofile
-EOF
-packages <<EOF
-acpi acpid acpitool aif alsa-utils augeas cowsay cpufrequtils curl dialog 
-firefox gamin git gstreamer0.10-base-plugins ifplugd iw mesa mesa-demos netcfg 
-openssh rfkill rsync rxvt-unicode sudo terminus-font vim wpa_actiond 
-wpa_supplicant_gui xmobar xorg-server-utils xorg-twm xorg-utils xorg-xclock 
-xorg-xinit xterm yacpi yajl youtube-dl zsh
-EOF
-aur <<EOF
-flashplugin-beta freetype2-git-infinality git-annex haskell-json 
-package-query-git wpa_auto xmonad-contrib-darcs xmonad-darcs yaourt-git testaur
-EOF
+[[ -e $CONFIG_PATH/$CONFIG_FILENAME ]] && . $CONFIG_PATH/$CONFIG_FILENAME
+. $CONFIG_PATH/$OVERLAY_FILENAME
+. $CONFIG_PATH/$PACKAGES_FILENAME
+. $CONFIG_PATH/$AUR_FILENAME
 
 # ----------------------------------------------------------------------
 # UPDATE PACKAGE DB
 # ----------------------------------------------------------------------
 if istrue $PACMAN_UPDATE
 then
-    sudo pacman -Sy
+    sudo pacman -Sy && log "pacman master package list updated"
 fi
 
 # ----------------------------------------------------------------------
 # DETECT GROUPS
 # ----------------------------------------------------------------------
 groups[potential]=$(pacman -Qg | awk '{print $1}' | sort | uniq)
-echo -e "$HR\nDETECTING INSTALLED GROUPS:"
+echo -e "$HR\nDETECTING INSTALLED GROUPS..."
 for groupname in ${groups[potential]}
 do
-    break # TODO DEBUG
     # get percentage of group already installed
     # sort and uniq are required as there can be duplicate package reporting if 
     # testing repos are live, for instance
@@ -187,9 +172,8 @@ do
         :
     fi
 done
-#echo "Groups detected: ${groups[detected]}"
 echo
-groups[detected]="base base-devel xfce4 xorg xorg-apps xorg-drivers xorg-fonts" # TODO DEBUG
+report groups "Groups detected: ${groups[detected]}"
 groups[live]="${groups[detected]}"
 
 # ----------------------------------------------------------------------
@@ -201,16 +185,15 @@ groups[live]="${groups[detected]}"
 #echo
 for groupname in ${groups[live]}
 do
-    break # TODO DEBUG
     grouprepo="$(pacman -Sgq $groupname)"; grouplocal="$(pacman -Qgq $groupname)"
     packages_official_grouped_missing[$groupname]=$(compare "$grouprepo" "$grouplocal")
     packages_official_grouped_removed[$groupname]=$(compare "$grouplocal" "$grouprepo")
     [[ -n ${packages_official_grouped_missing[$groupname]} ]] \
-        && echo $groupname group has new packages that can be installed: ${packages_official_grouped_missing[$groupname]}
+        && report groups $groupname group has new packages that can be installed: ${packages_official_grouped_missing[$groupname]}
     [[ -n ${packages_official_grouped_removed[$groupname]} ]] \
-        && echo $groupname group has removed packages\; the following can be removed locally: ${packages_official_grouped_removed[$groupname]}
+        && report groups $groupname group has removed packages\; the following can be removed locally: ${packages_official_grouped_removed[$groupname]}
     [[ -z ${packages_official_grouped_missing[$groupname]} && -z ${packages_official_grouped_removed[$groupname]} ]] \
-        && echo $groupname package list is up to date
+        && report groups $groupname package list is up to date
 done
 
 # ----------------------------------------------------------------------
@@ -218,19 +201,19 @@ done
 # ----------------------------------------------------------------------
 packages_official[live]="$(compare "$(compare "$(pacman -Qeq)" "$(pacman -Qmq)")" "$(pacman -Qgq ${groups[live]})")"
 packages_aur[live]="$(common "$(pacman -Qeq)" "$(pacman -Qmq)")"
-echo -e "$HR\nOFFICIAL PACKAGES (EXCL. DEPENDENCIES, NO GROUP PACKAGES):"
-echo ${packages_official[live]}
-echo -e "$HR\nAUR PACKAGES (EXCL. DEPENDENCIES):"
-echo ${packages_aur[live]}
+report packages "\nOFFICIAL PACKAGES (EXCL. DEPENDENCIES, NO GROUP PACKAGES):"
+report packages ${packages_official[live]}
+report packages "\nAUR PACKAGES (EXCL. DEPENDENCIES):"
+report packages ${packages_aur[live]}
 
 missing_official_from[system]="$(compare "${packages_official[file]}" "${packages_official[live]}")"
 missing_official_from[config]="$(compare "${packages_official[live]}" "${packages_official[file]}")"
 missing_aur_from[system]="$(compare "${packages_aur[file]}" "${packages_aur[live]}")"
 missing_aur_from[config]="$(compare "${packages_aur[live]}" "${packages_aur[file]}")"
-[[ -n ${missing_official_from[system]} ]] && echo -e "$HR\nOFFICIAL PACKAGES MISSING FROM SYSTEM:\n"$(echo ${missing_official_from[system]})
-[[ -n ${missing_official_from[config]} ]] && echo -e "$HR\nOFFICIAL PACKAGES MISSING FROM CONFIG:\n"$(echo ${missing_official_from[config]})
-[[ -n ${missing_aur_from[system]} ]] && echo -e "$HR\nAUR PACKAGES MISSING FROM SYSTEM:\n"$(echo ${missing_aur_from[system]})
-[[ -n ${missing_aur_from[config]} ]] && echo -e "$HR\nAUR PACKAGES MISSING FROM CONFIG:\n"$(echo ${missing_aur_from[config]})
+[[ -n ${missing_official_from[system]} ]] && report packages "OFFICIAL PACKAGES MISSING FROM SYSTEM:\n"$(echo ${missing_official_from[system]})
+[[ -n ${missing_official_from[config]} ]] && report packages "OOFFICIAL PACKAGES MISSING FROM CONFIG:\n"$(echo ${missing_official_from[config]})
+[[ -n ${missing_aur_from[system]} ]] && report packages "OAUR PACKAGES MISSING FROM SYSTEM:\n"$(echo ${missing_aur_from[system]})
+[[ -n ${missing_aur_from[config]} ]] && report packages "OAUR PACKAGES MISSING FROM CONFIG:\n"$(echo ${missing_aur_from[config]})
 
 # ----------------------------------------------------------------------
 # OVERLAY FILES STATE
@@ -244,7 +227,8 @@ do
     _attribs=$(echo -n $line | awk '{print $2,$3,$4}')
     [[ -e $_path ]] && _live_attribs=$(stat -c '%a %U %G' $_path)
     [[ -z $_attribs && -e $_path ]] && _attribs=$_live_attribs
-    [[ -z $_attribs ]] && _permissions=$DEFAULT_ATTRIBS
+    #TODO: may be better to not set default values in case of no current live file
+    #[[ -z $_attribs ]] && _attribs=$DEFAULT_ATTRIBS
     overlay_files[reviewed]+="$_path $_attribs\n"
     [[ -e $_path ]] && overlay_files[live]+="$_path $_live_attribs\n" || overlay_files[live]+="$_path $_attribs\n"
     overlay_files[paths]+="$_path\n"
@@ -252,6 +236,14 @@ done
 overlay_files[file]="$(echo -e "${overlay_files[reviewed]}" | sed '/^$/d')"
 overlay_files[live]="$(echo -e "${overlay_files[live]}" | sed '/^$/d')"
 overlay_files[paths]="$(echo -e "${overlay_files[paths]}" | sed '/^$/d')"
+overlay_files[diff]="$(compare "${overlay_files[live]}" "${overlay_files[file]}")"
+report overlay "\nOverlay file list:"
+report overlay ${overlay_files[file]}
+if [[ -n ${overlay_files[diff]} ]]
+then
+    report overlay "\nOverlay file items that differ from the live system"
+    report overlay "${overlay_files[diff]}"
+fi
 IFS=$_IFS
 
 # ----------------------------------------------------------------------
@@ -276,30 +268,34 @@ then
     for line in ${overlay_files[live]}
     do
         _path=$(echo -n $line | awk '{print $1}')
-        if [[ -d "$CONFIG_PATH/$OVERLAY_DIRNAME" ]]
-        then
-        install -dCD --backup=$backup_mode -S"-$CMD-$(date +%F-%s)" "$_path" "$CONFIG_PATH/$OVERLAY_DIRNAME/${_path#/}"
-        else
-        install -CD --backup=$backup_mode -S"-$CMD-$(date +%F-%s)" "$_path" "$CONFIG_PATH/$OVERLAY_DIRNAME/${_path#/}"
-        fi
+        install -CD --backup=${BACKUP_MODE} -S${BACKUP_SUFFIX} "$_path" "$CONFIG_PATH/$OVERLAY_DIRNAME/${_path#/}"
+        #TODO: we don't handle directories yet
     done
     IFS=$_IFS
+
+    #TODO: we've already recorded possible new or removed packages on both sides 
+    #but we need to prompt the user to choose what to do
+
+    rm -rf $TEMP_PATH; mkdir $TEMP_PATH
+
+    echo "overlay <<EOF" > $TEMP_PATH/$OVERLAY_FILENAME
+    echo "${overlay_files[live]}" >> $TEMP_PATH/$OVERLAY_FILENAME
+    echo "EOF" >> $TEMP_PATH/$OVERLAY_FILENAME
+
+    echo "packages <<EOF" > $TEMP_PATH/$PACKAGES_FILENAME
+    echo ${packages_official[live]} >> $TEMP_PATH/$PACKAGES_FILENAME
+    echo "EOF" >> $TEMP_PATH/$PACKAGES_FILENAME
+
+    echo "aur <<EOF" > $TEMP_PATH/$AUR_FILENAME
+    echo ${packages_aur[live]} >> $TEMP_PATH/$AUR_FILENAME
+    echo "EOF" >> $TEMP_PATH/$AUR_FILENAME
+
+    for _filename in $OVERLAY_FILENAME $PACKAGES_FILENAME $AUR_FILENAME
+    do
+        install -CD --backup=${BACKUP_MODE} -S${BACKUP_SUFFIX} "$TEMP_PATH/$_filename" "$CONFIG_PATH/$_filename"
+    done
+
 fi
-
-#TODO: we've already recorded possible new or removed packages on both sides 
-#but we need to prompt the user to choose what to do
-
-rm -rf $TEMP_PATH; mkdir $TEMP_PATH
-echo "${overlay_files[live]}" > $TEMP_PATH/$OVERLAY_FILENAME
-echo "${packages_official[live]}" > $TEMP_PATH/$PACKAGES_FILENAME
-echo "${packages_aur[live]}" > $TEMP_PATH/$AUR_FILENAME
-for _filename in $OVERLAY_FILENAME $PACKAGES_FILENAME $AUR_FILENAME
-do
-    install -CD --backup=$backup_mode -S"-$CMD-$(date +%F-%s)" "$TEMP_PATH/$_filename" "$CONFIG_PATH/$_filename"
-done
-
-exit
-
 
 # ----------------------------------------------------------------------
 # ACTION: SYSTEM UPDATE
@@ -326,27 +322,31 @@ then
         _perms=$(echo -n $line | awk '{print $2}')
         _owner=$(echo -n $line | awk '{print $3}')
         _group=$(echo -n $line | awk '{print $4}')
-        if [[ -d "$CONFIG_PATH/$OVERLAY_DIRNAME" ]]
-        then
-        install -dCD --backup=$backup_mode -S"-$CMD-$(date +%F-%s)" -g${_group} -o${_owner} -m${_mode} "$CONFIG_PATH/$OVERLAY_DIRNAME/${_path#/}" "$_path"
-        else
-        install -CD --backup=$backup_mode -S"-$CMD-$(date +%F-%s)" -g${_group} -o${_owner} -m${_mode} "$CONFIG_PATH/$OVERLAY_DIRNAME/${_path#/}" "$_path"
-        fi
+        install -CD --backup=${BACKUP_MODE} -S${BACKUP_SUFFIX} -g${_group} -o${_owner} -m${_mode} "$CONFIG_PATH/$OVERLAY_DIRNAME/${_path#/}" "$_path"
     done
     IFS=$_IFS
 fi
-exit
 
 # ----------------------------------------------------------------------
 # ACTION: REPORT
 # ----------------------------------------------------------------------
-echo -e "$HR\nOVERLAY FILES LIST:"
-echo -e "${overlay_files[live]}"
-echo "OVERLAY FILE $HR"
-echo "${overlay_files[file]}"
-echo "OVERLAY LIVE $HR"
-echo "${overlay_files[live]}"
-exit
+#${overlay_files[file]}
+#${overlay_files[live]}
+#${packages_official[live]}
+#${packages_aur[live]}
+#${packages_official[file]}
+#${packages_aur[file]}
+#${missing_official_from[system]}
+#${missing_official_from[config]}
+#${missing_aur_from[system]}
+#${missing_aur_from[config]}
+#${groups[live]}
+echo -e "$HR\nOVERLAY\n"
+echo -e "${REPORT[overlay]}"
+echo -e "$HR\nGROUPS\n"
+echo -e "${REPORT[groups]}"
+echo -e "$HR\nPACKAGES\n"
+echo -e "${REPORT[packages]}"
 
 # ----------------------------------------------------------------------
 # REGEN
