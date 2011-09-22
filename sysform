@@ -303,7 +303,7 @@ then
         fi
         case $response in
             [dD]*)
-                eval $_package_list_name=\"\$(compare \"$_package_list_name\" \"\${_package_name}\")\"
+                eval $_package_list_name=\"\$\(compare \"$_package_list_name\" \"\${_package_name}\"\)\"
                 echo "$_package_name removed from config overlay list."
             ;;
             *)
@@ -327,7 +327,7 @@ then
         fi
         case $response in
             [aA]*)
-                eval $_package_list_name=\"\$(combine \"$_package_list_name\" \"\${_package_name}\")\"
+                eval $_package_list_name=\"\$\(combine \"$_package_list_name\" \"\${_package_name}\"\)\"
                 echo "$_package_name added to config overlay list."
             ;;
             *)
