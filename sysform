@@ -28,7 +28,8 @@ OVERLAY_DIRNAME=overlay.d
 DEFAULT_CONFIG_PATH="$XDG_CONFIG_HOME/$CMD/$HOSTNAME"
 BACKUP_SUFFIX=".$CMD" #BACKUP_SUFFIX="$CMD-$(date +%F-%s)"
 BACKUP_MODE=simple
-. $(dirname $0)/lib/common
+LIB_DIR="$(dirname $0)/lib"
+. $LIB_DIR/common
 
 # ----------------------------------------------------------------------
 # DECLARATIONS
@@ -150,7 +151,7 @@ fi
 # DETECT GROUPS
 # ----------------------------------------------------------------------
 groups[potential]=$(pacman -Qg | awk '{print $1}' | sort | uniq)
-echo -e "$HR\nDETECTING INSTALLED GROUPS..."
+#echo -e "$HR\nDETECTING INSTALLED GROUPS..."
 for groupname in ${groups[potential]}
 do
     # get percentage of group already installed
@@ -165,7 +166,7 @@ do
     if [[ $score -le $threshold ]]
     then
         groups[detected]+="$groupname "
-        echo -n "$groupname "
+        #echo -n "$groupname "
         #echo "(scored $score; marked INSTALLED)"
     else
         #echo "(scored $score)"
@@ -173,7 +174,8 @@ do
     fi
 done
 echo
-report groups "Groups detected: ${groups[detected]}"
+report groups "FULLY INSTALLED GROUPS (DETECTED):"
+report groups "${groups[detected]}\n"
 groups[live]="${groups[detected]}"
 
 # ----------------------------------------------------------------------
@@ -185,42 +187,55 @@ groups[live]="${groups[detected]}"
 #echo
 for groupname in ${groups[live]}
 do
+    all_clear=true
     grouprepo="$(pacman -Sgq $groupname)"; grouplocal="$(pacman -Qgq $groupname)"
     packages_official_grouped_missing[$groupname]=$(compare "$grouprepo" "$grouplocal")
     packages_official_grouped_removed[$groupname]=$(compare "$grouplocal" "$grouprepo")
-    [[ -n ${packages_official_grouped_missing[$groupname]} ]] \
-        && report groups $groupname group has new packages that can be installed: ${packages_official_grouped_missing[$groupname]}
-    [[ -n ${packages_official_grouped_removed[$groupname]} ]] \
-        && report groups $groupname group has removed packages\; the following can be removed locally: ${packages_official_grouped_removed[$groupname]}
-    [[ -z ${packages_official_grouped_missing[$groupname]} && -z ${packages_official_grouped_removed[$groupname]} ]] \
-        && report groups $groupname package list is up to date
+    if [[ -n ${packages_official_grouped_missing[$groupname]} ]]
+    then
+        report groups $groupname groups has new packages that can be installed: ${packages_official_grouped_missing[$groupname]}
+        all_clear=false
+    fi
+    if [[ -n ${packages_official_grouped_removed[$groupname]} ]]
+    then
+        report groups $groupname groups has removed packages\; the following can be removed locally: ${packages_official_grouped_removed[$groupname]}
+        all_clear=false
+    fi
 done
+$(istrue $all_clear) && report groups "All group package lists are up to date"
 
 # ----------------------------------------------------------------------
 # PACKAGE STATE
 # ----------------------------------------------------------------------
 packages_official[live]="$(compare "$(compare "$(pacman -Qeq)" "$(pacman -Qmq)")" "$(pacman -Qgq ${groups[live]})")"
 packages_aur[live]="$(common "$(pacman -Qeq)" "$(pacman -Qmq)")"
-report packages "\nOFFICIAL PACKAGES (EXCL. DEPENDENCIES, NO GROUP PACKAGES):"
-report packages ${packages_official[live]}
+report packages "OFFICIAL PACKAGES (EXCL. DEPENDENCIES, NO GROUP PACKAGES):"
+report packages ${packages_official[live]:-NONE}
 report packages "\nAUR PACKAGES (EXCL. DEPENDENCIES):"
-report packages ${packages_aur[live]}
+report packages ${packages_aur[live]:-NONE}
 
 missing_official_from[system]="$(compare "${packages_official[file]}" "${packages_official[live]}")"
 missing_official_from[config]="$(compare "${packages_official[live]}" "${packages_official[file]}")"
 missing_aur_from[system]="$(compare "${packages_aur[file]}" "${packages_aur[live]}")"
 missing_aur_from[config]="$(compare "${packages_aur[live]}" "${packages_aur[file]}")"
-[[ -n ${missing_official_from[system]} ]] && report packages "OFFICIAL PACKAGES MISSING FROM SYSTEM:\n"$(echo ${missing_official_from[system]})
-[[ -n ${missing_official_from[config]} ]] && report packages "OOFFICIAL PACKAGES MISSING FROM CONFIG:\n"$(echo ${missing_official_from[config]})
-[[ -n ${missing_aur_from[system]} ]] && report packages "OAUR PACKAGES MISSING FROM SYSTEM:\n"$(echo ${missing_aur_from[system]})
-[[ -n ${missing_aur_from[config]} ]] && report packages "OAUR PACKAGES MISSING FROM CONFIG:\n"$(echo ${missing_aur_from[config]})
+[[ -n ${missing_official_from[system]} ]] \
+    && report packages "\nMISSING: The $CMD config includes the following packages that are not installed on the system:" \
+    && report packages $(echo ${missing_official_from[system]})
+[[ -n ${missing_official_from[config]} ]] \
+    && report packages "\nMISSING: The system contains the following installed packages that are missing from your $CMD config:" \
+    && report packages $(echo ${missing_official_from[config]})
+[[ -n ${missing_aur_from[system]} ]] \
+    && report packages "\nMISSING: The $CMD config includes the following AUR packages that are not installed on the system:" \
+    && report packages $(echo ${missing_official_from[system]})
+[[ -n ${missing_aur_from[config]} ]] \
+    && report packages "\nMISSING: The system contains the following installed AUR packages that are missing from your $CMD config:" \
+    && report packages $(echo ${missing_official_from[config]})
 
 # ----------------------------------------------------------------------
 # OVERLAY FILES STATE
 # ----------------------------------------------------------------------
 DEFAULT_ATTRIBS="644 root root"
 _IFS=$IFS; IFS=$'\n'
-#while read line
 for line in ${overlay_files[file]}
 do
     _path=$(echo -n $line | awk '{print $1}')
@@ -233,18 +248,18 @@ do
     [[ -e $_path ]] && overlay_files[live]+="$_path $_live_attribs\n" || overlay_files[live]+="$_path $_attribs\n"
     overlay_files[paths]+="$_path\n"
 done
+IFS=$_IFS
 overlay_files[file]="$(echo -e "${overlay_files[reviewed]}" | sed '/^$/d')"
 overlay_files[live]="$(echo -e "${overlay_files[live]}" | sed '/^$/d')"
 overlay_files[paths]="$(echo -e "${overlay_files[paths]}" | sed '/^$/d')"
 overlay_files[diff]="$(compare "${overlay_files[live]}" "${overlay_files[file]}")"
-report overlay "\nOverlay file list:"
-report overlay ${overlay_files[file]}
+report overlay "Overlay file list:"
+report overlay "${overlay_files[file]}"
 if [[ -n ${overlay_files[diff]} ]]
 then
     report overlay "\nOverlay file items that differ from the live system"
     report overlay "${overlay_files[diff]}"
 fi
-IFS=$_IFS
 
 # ----------------------------------------------------------------------
 # ACTION: CONFIG UPDATE
@@ -259,8 +274,8 @@ then
         echo
         echo "${overlay_files[paths]}"
         echo
-        echo -n "Proceed? (y/n) "
-        read answer; if ! istrue $answer; then exit 0; fi 
+        echo -n "Proceed? "
+        $(query) || exit 0
     fi
     #TODO: offer diff report option, consider precheck diff
 
@@ -273,8 +288,95 @@ then
     done
     IFS=$_IFS
 
-    #TODO: we've already recorded possible new or removed packages on both sides 
-    #but we need to prompt the user to choose what to do
+    query_remove ()
+    {
+        local _package_name=$1
+        local _package_listname=$2
+        $(istrue $FORCE) && PROCESS_ALL=D
+        if [[ $PROCESS_ALL =~ ^[DS] ]]
+        then
+            echo -e "\n$_package_name:"
+            echo -e "DELETE from the config package list or SKIP?"
+            read -p "(d/D/s/S) d/s to delete/skip *this* package; D/S for *all* remaining removal candidates." response
+        else
+            response=$PROCESS_ALL
+        fi
+        case $response in
+            [dD]*)
+                eval $_package_list_name=\"\$(compare \"$_package_list_name\" \"\${_package_name}\")\"
+                echo "$_package_name removed from config overlay list."
+            ;;
+            *)
+                echo "$_package_name skipped (remains in config overlay list)."
+            ;;
+        esac
+        PROCESS_ALL=$response
+    }
+    query_add ()
+    {
+        local _package_name=$1
+        local _package_listname=$2
+        $(istrue $FORCE) && PROCESS_ALL=A
+        if [[ $PROCESS_ALL =~ ^[AS] ]]
+        then
+            echo -e "\n$_package_name:"
+            echo -e "ADD this package to the config package list or skip?"
+            read -p "(a/A/s/S) a/d for *this* package; A/S for *all* remaining addition candidates." response
+        else
+            response=$PROCESS_ALL
+        fi
+        case $response in
+            [aA]*)
+                eval $_package_list_name=\"\$(combine \"$_package_list_name\" \"\${_package_name}\")\"
+                echo "$_package_name added to config overlay list."
+            ;;
+            *)
+                echo "$_package_name skipped (not added to config overlay list)."
+            ;;
+        esac
+        PROCESS_ALL=$response
+    }
+
+    if [[ -n ${missing_official_from[system]} ]]
+    then
+        echo -e "\nMISSING FROM SYSTEM: The $CMD config includes the following packages that are not installed on the system. If you choose to KEEP these packages in your config package list, you can automatically install them to your system by running $CMD again in system update mode."
+        echo $(echo ${missing_official_from[system]})
+        PROCESS_ALL=
+        for _package in $(echo ${missing_official_from[system]})
+        do
+            query_remove "$_package" "packages_official[file]"
+        done
+    fi
+    if [[ -n ${missing_official_from[config]} ]]
+    then
+        echo "\nMISSING PACKAGES FROM CONFIG: The system contains the following installed packages that are missing from your $CMD config. If you choose not to add them to your config file, you can remove them from your system by running $CMD in system update mode."
+        echo $(echo ${missing_official_from[config]})
+        PROCESS_ALL=
+        for _package in $(echo ${missing_official_from[config]})
+        do
+            query_add "$_package" "packages_official[file]"
+        done
+    fi
+    if [[ -n ${missing_aur_from[system]} ]]
+    then
+        echo -e "\nMISSING AUR FROM SYSTEM: The $CMD config includes the following AUR packages that are not installed on the system. If you choose to KEEP these AUR packages in your config package list, you can automatically install them to your system by running $CMD again in system update mode."
+        echo $(echo ${missing_aur_from[system]})
+        PROCESS_ALL=
+        for _package in $(echo ${missing_aur_from[system]})
+        do
+            query_remove "$_package" "packages_aur[file]"
+        done
+    fi
+    if [[ -n ${missing_aur_from[config]} ]]
+    then
+        echo "\nMISSING AUR FROM CONFIG: The system contains the following installed AUR packages that are missing from your $CMD config. If you choose not to add them to your config file, you can remove them from your system by running $CMD in system update mode."
+        echo $(echo ${missing_aur_from[config]})
+        PROCESS_ALL=
+        for _package in $(echo ${missing_aur_from[config]})
+        do
+            query_add "$_package" "packages_aur[file]"
+        done
+    fi
 
     rm -rf $TEMP_PATH; mkdir $TEMP_PATH
 
@@ -293,8 +395,9 @@ then
     for _filename in $OVERLAY_FILENAME $PACKAGES_FILENAME $AUR_FILENAME
     do
         install -CD --backup=${BACKUP_MODE} -S${BACKUP_SUFFIX} "$TEMP_PATH/$_filename" "$CONFIG_PATH/$_filename"
+        report update_config "Updated overlay file: $CONFIG_PATH/$_filename"
     done
-
+    
 fi
 
 # ----------------------------------------------------------------------
@@ -302,6 +405,98 @@ fi
 # ----------------------------------------------------------------------
 if istrue $SYSTEM_UPDATE
 then
+
+#PACKAGES
+    query_install ()
+    {
+        local _package_name=$1
+        $(istrue $FORCE) && PROCESS_ALL=I
+        if [[ $PROCESS_ALL =~ ^[IS] ]]
+        then
+            echo -e "\n$_package_name:"
+            echo -e "INSTALL this package or SKIP?"
+            read -p "(i/I/s/S) i/s for *this* package; I/S for *all* remaining installation candidates." response
+        else
+            response=$PROCESS_ALL
+        fi
+        case $response in
+            [iI]*)
+                yaourt -S --noconfirm $_package_name && echo "$_package_name installed." \
+                || echo "ERROR during installaiton of $_package_name."
+            ;;
+            *)
+                echo "$_package_name skipped (not installed)."
+            ;;
+        esac
+        PROCESS_ALL=$response
+    }
+    query_uninstall ()
+    {
+        local _package_name=$1
+        local _package_listname=$2
+        $(istrue $FORCE) && PROCESS_ALL=U
+        if [[ $PROCESS_ALL =~ ^[US] ]]
+        then
+            echo -e "\n$_package_name:"
+            echo -e "UNINSTALL this package or SKIP?"
+            read -p "(u/U/s/S) u/s for *this* package; U/S for *all* remaining uninstallation candidates." response
+        else
+            response=$PROCESS_ALL
+        fi
+        case $response in
+            [aA]*)
+                yaourt -R --noconfirm $_package_name && echo "$_package_name removed from system." \
+                || echo "ERROR during removal of $_package_name."
+            ;;
+            *)
+                echo "$_package_name skipped (not removed from system)."
+            ;;
+        esac
+        PROCESS_ALL=$response
+    }
+
+    if [[ -n ${missing_official_from[system]} ]]
+    then
+        echo -e "\nMISSING PACKAGES FROM SYSTEM: The $CMD config includes the following packages that are not installed on the system. If you choose to skip installation and wish to remove them from your config, run $CMD again in config update mode."
+        echo $(echo ${missing_official_from[system]})
+        PROCESS_ALL=
+        for _package in $(echo ${missing_official_from[system]})
+        do
+            query_install "$_package"
+        done
+    fi
+    if [[ -n ${missing_official_from[config]} ]]
+    then
+        echo "\nMISSING PACKAGES FROM CONFIG: The system contains the following installed packages that are missing from your $CMD config. If you choose to skip uninstallation you can add them to your config by running $CMD again in config update mode."
+        echo $(echo ${missing_official_from[config]})
+        PROCESS_ALL=
+        for _package in $(echo ${missing_official_from[config]})
+        do
+            query_uninstall "$_package"
+        done
+    fi
+    if [[ -n ${missing_aur_from[system]} ]]
+    then
+        echo -e "\nMISSING AUR FROM SYSTEM: The $CMD config includes the following AUR packages that are not installed on the system. If you choose to skip installation and wish to remove them from your config, run $CMD again in config update mode."
+        echo $(echo ${missing_aur_from[system]})
+        PROCESS_ALL=
+        for _package in $(echo ${missing_aur_from[system]})
+        do
+            query_install "$_package"
+        done
+    fi
+    if [[ -n ${missing_aur_from[config]} ]]
+    then
+        echo "\nMISSING AUR FROM CONFIG: The system contains the following installed AUR packages that are missing from your $CMD config. If you choose to skip uninstallation you can add them to your config by running $CMD again in config update mode."
+        echo $(echo ${missing_aur_from[config]})
+        PROCESS_ALL=
+        for _package in $(echo ${missing_aur_from[config]})
+        do
+            query_uninstall "$_package"
+        done
+    fi
+
+#OVERLAY
     if ! istrue $FORCE
     then
         echo -e "$HR\nWRITE WARNING:"
@@ -310,11 +505,9 @@ then
         echo
         echo "${overlay_files[paths]}"
         echo
-        echo -n "Proceed? (y/n) "
-        read answer; if ! istrue $answer; then exit 0; fi 
+        echo -n "Proceed? "
+        $(query) || exit 0
     fi
-    #TODO: offer diff report option, consider precheck diff
-
     _IFS=$IFS; IFS=$'\n'
     for line in ${overlay_files[file]}
     do
@@ -341,12 +534,12 @@ fi
 #${missing_aur_from[system]}
 #${missing_aur_from[config]}
 #${groups[live]}
-echo -e "$HR\nOVERLAY\n"
-echo -e "${REPORT[overlay]}"
 echo -e "$HR\nGROUPS\n"
 echo -e "${REPORT[groups]}"
 echo -e "$HR\nPACKAGES\n"
 echo -e "${REPORT[packages]}"
+echo -e "$HR\nOVERLAY\n"
+echo -e "${REPORT[overlay]}"
 
 # ----------------------------------------------------------------------
 # REGEN
