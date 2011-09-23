@@ -15,7 +15,7 @@
 # +--overlay
 # +--profile
 
-DEBUG=true
+#DEBUG=true
 
 # ----------------------------------------------------------------------
 # DEFAULTS
@@ -30,8 +30,21 @@ OVERLAY_DIRNAME=overlay.d
 DEFAULT_CONFIG_PATH="$XDG_CONFIG_HOME/$CMD/$HOSTNAME"
 BACKUP_SUFFIX=".$CMD" #BACKUP_SUFFIX="$CMD-$(date +%F-%s)"
 BACKUP_MODE=simple
+
+# ----------------------------------------------------------------------
+# LIBS
+# ----------------------------------------------------------------------
 LIB_DIR="$(dirname $0)/lib"
 . $LIB_DIR/common
+# SCRIPT SPECIFIC FUNCTIONS LIB
+overlay () { read -r -d '' overlay_files[file]; }
+packages () { read -r -d '' _packages; for p in $_packages; do packages_official[file]+="$p
+"; done; }
+aur () { read -r -d '' _packages; for p in $_packages; do packages_aur[file]+="$p
+"; done; }
+regen () { echo "TODO: add mkinitcpio, grub regen here"; }
+declare -A REPORT
+report () { _category=$1; shift; REPORT[$_category]+="$*\n"; }
 
 # ----------------------------------------------------------------------
 # DECLARATIONS
@@ -52,17 +65,17 @@ option_config_update=(
 [key]="c"
 [value_state]="false"
 [value_ifset]="true"
-[report]="running in report only mode (will report difference between system and config)"
-[report_ifset]="update mode; $CMD will update config files (use with backup to preserve existing overlay files)"
-[usage_summary]="Update configuration files in config directory. Can be used in conjunction with the backup option"
+[report]="config update off; no changes will be made to $CMD config files"
+[report_ifset]="config update on; changes will be made to $CMD config files"
+[usage_summary]="Update files in config directory. Use with backup/force."
 )
 option_config_path=(
 [key]="p"
 [value_state]="$DEFAULT_CONFIG_PATH"
 [value_ifset]=":path"
-[report]="default config path used"
+[report]="no custom config path; default config path used"
 [report_ifset]="custom config path set"
-[usage_summary]="Set custom config *directory* path. Default for this system is $DEFAULT_CONFIG_PATH"
+[usage_summary]="Set custom config directory. Default is $DEFAULT_CONFIG_PATH"
 )
 option_backup=(
 [key]="b"
@@ -76,16 +89,16 @@ option_system_update=(
 [key]="s"
 [value_state]="false"
 [value_ifset]="true"
-[report]="system file conform off; no live system files will be written to during this procedure."
-[report_ifset]="system file conform on; live system files *will* be overwritten, recommend using this with the backup option."
-[usage_summary]="Update system files with current sysform config overlay files. Should be used with the backup option if you want to preserve existing files."
+[report]="system update off; no system files will be updated"
+[report_ifset]="system update on; live system files will be overwritten"
+[usage_summary]="Update system files and packages from config values. Optionally use with force/backup."
 )
 option_force=(
 [key]="f"
 [value_state]="false"
 [value_ifset]="true"
-[report]="force mode off; queries will be presented prior to file write operations."
-[report_ifset]="force mode on; no queries will be presented; CAUTION"
+[report]="force mode off; prompt before file write operations."
+[report_ifset]="force mode on; no prompts presented; CAUTION"
 [usage_summary]="Force all write operations; no queries will be given, use with caution and consider use of the backup option. Applies to both config and system updates."
 )
 option_git_update=(
@@ -109,6 +122,7 @@ option_pacman_update=(
 # PROCESS OPTIONS
 # ----------------------------------------------------------------------
 process_opts
+report_opts
 $(istrue $BACKUP) || BACKUP_MODE=none
 if istrue $CONFIG_UPDATE && istrue $SYSTEM_UPDATE
 then
@@ -119,8 +133,25 @@ if $(istrue $CONFIG_UPDATE) && $(istrue $FORCE)
 then
     echo "WARNING: running in forced config update mode."
     echo "All config files will be replaced automatically."
-    $(istrue $BACKUP) && echo "Backups will be created for all replaced files." \
+    echo "All package lists will be updated to match live system state."
+    $(istrue $BACKUP) && echo "BACKUPS WILL BE CREATED for all replaced files." \
     || echo "NO BACKUPS WILL BE CREATED; cancel and run $CMD again with the backup option as well to create backup files."
+    $(query "Proceed?") || exit 0
+fi
+if $(istrue $SYSTEM_UPDATE) && $(istrue $FORCE)
+then
+    echo "WARNING: running in forced system update mode."
+    echo -e "\nOVERLAY FILES:"
+    echo "All system files included in config overlay will be replaced automatically."
+    echo -e "\nPACKAGES"
+    echo "Packages listed in the config package list will be automatically installed."
+    echo "Packages not listed in the config package list will be automatically removed."
+    echo -e "\nGROUPS (only applies to fully installed package groups)."
+    echo "Missing group packages will be added (only for fully installed package groups)."
+    echo "Group packages that have been removed will be uninstalled (only for fully installed package groups)."
+    $(istrue $BACKUP) && echo -e "\nBACKUPS WILL BE CREATED for all replaced files." \
+    || echo -e "\nNO BACKUPS WILL BE CREATED; cancel and run $CMD again with the backup option as well to create backup files."
+    echo
     $(query "Proceed?") || exit 0
 fi
 
@@ -160,8 +191,11 @@ do
 done
 
 # ----------------------------------------------------------------------
-# UPDATE PACKAGE DB
+# YAOURT CHECK & UPDATE PACKAGE DB
 # ----------------------------------------------------------------------
+
+# yaourt check
+
 if istrue $PACMAN_UPDATE
 then
     progress "Updating pacman master package list"
@@ -334,10 +368,10 @@ progress "Starting config update"
         case $response in
             [dD]*)
                 eval $_package_list_name=\"\$\(compare \"\${$_package_list_name}\" $_package_name\)\"
-                echo "$_package_name removed from config overlay list."
+                echo "$_package_name removed from config package list."
             ;;
             *)
-                echo "$_package_name skipped (remains in config overlay list)."
+                echo "$_package_name skipped (remains in config package list)."
             ;;
         esac
         PROCESS_ALL=$response
@@ -357,10 +391,10 @@ progress "Starting config update"
         case $response in
             [aA]*)
                 eval $_package_list_name=\"\$\(echo -e \"\${$_package_list_name}\\n$_package_name\" \| sort \| uniq\)\";
-                echo "$_package_name added to config overlay list."
+                echo "$_package_name added to config package list."
             ;;
             *)
-                echo "$_package_name skipped (not added to config overlay list)."
+                echo "$_package_name skipped (not added to config package list)."
             ;;
         esac
         PROCESS_ALL=$response
@@ -601,23 +635,9 @@ echo -e "${REPORT[overlay]}"
 fi
 
 # ----------------------------------------------------------------------
-# REGEN
-# ----------------------------------------------------------------------
-# can override in a config file
-
-
-
-
-
-
-# ----------------------------------------------------------------------
 # ----------------------------------------------------------------------
 # ----------------------------------------------------------------------
 
 # install yaourt
-
-# reinstall config files
-
-# final regen of any required files (mkinicpio, grub2, etc.)
 
 # git commit & push on update? -g option?
