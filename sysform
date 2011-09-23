@@ -525,6 +525,28 @@ progress "Starting system update"
         done
     fi
 
+    for groupname in ${groups[live]}
+    do
+        if [[ -n ${packages_official_grouped_missing[$groupname]} ]]
+        then
+            PROCESS_ALL=
+            echo -e "\nGROUP HAS NEW PACKAGES: The $groupname package group has added new packages ($(echo ${packages_official_grouped_missing[$groupname]})). If you install these new packages, run $CMD again in config update mode to add them to your config as well."
+            for _package in $(echo ${packages_official_grouped_missing[$groupname]})
+            do
+                query_install "$_package"
+            done
+        fi
+        if [[ -n ${packages_official_grouped_removed[$groupname]} ]]
+        then
+            PROCESS_ALL=
+            echo -e "\nGROUP HAS REMOVED PACKAGES: The $groupname package group has removed previously included packages ($(echo ${packages_official_grouped_removed[$groupname]})). If you remove these new packages, run $CMD again in config update mode to remove them from your config as well."
+            for _package in $(echo ${packages_official_grouped_removed[$groupname]})
+            do
+                query_uninstall "$_package"
+            done
+        fi
+    done
+
 #OVERLAY
     if ! istrue $FORCE
     then
@@ -547,7 +569,11 @@ progress "Starting system update"
         install -CD --backup=${BACKUP_MODE} -S${BACKUP_SUFFIX} -g${_group} -o${_owner} -m${_mode} "$CONFIG_PATH/$OVERLAY_DIRNAME/${_path#/}" "$_path"
     done
     IFS=$_IFS
+
+regen
+
 progress "System update complete"
+
 fi
 
 # ----------------------------------------------------------------------
@@ -578,7 +604,6 @@ fi
 # REGEN
 # ----------------------------------------------------------------------
 # can override in a config file
-regen
 
 
 
