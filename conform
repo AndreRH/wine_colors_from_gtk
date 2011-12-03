@@ -215,6 +215,7 @@ lnup $PATH_ETC/vim/vimrc 		.vimrc
 # xmonad ---------------------------------------------------------------
 lnup $PATH_ETC/xmonad			.xmonad
 lnup $PATH_ETC/xmonad/xmobarrc		.xmobarrc
+lnup $PATH_ETC/xmonad/taffybar		.config/taffybar
 
 # xorg -----------------------------------------------------------------
 lnup $PATH_ETC/xorg/Xresources		.Xresources
