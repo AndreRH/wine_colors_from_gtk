@@ -135,8 +135,8 @@ wifi ()
 {
     case $* in
         toggle) rfkill list wifi | egrep -iq "soft.*yes" && wifi off || wifi on ;;
-        on) rfkill unblock wifi && echo -n off > $STATE/wifi && ip link set wlan0 up; Notify "wifi on" ;;
-        off) rfkill block wifi && echo -n on > $STATE/wifi && Notify "wifi off" ;;
+        on) rfkill unblock wifi && ip link set wlan0 up; Notify "wifi on" && echo -n on > $STATE/wifi ;;
+        off) rfkill block wifi && Notify "wifi off" && echo -n off > $STATE/wifi ;;
         restore)
             [[ -f "$STATE/wifi" ]] && [[ -n "$(cat "$STATE/wifi")" ]] && _state=$(cat "$STATE/wifi")
             wifi ${_state:-on}
@@ -152,7 +152,7 @@ bluetooth ()
         off) rfkill block bluetooth && echo -n off > $STATE/bluetooth ;;
         restore)
             [[ -f "$STATE/bluetooth" ]] && [[ -n "$(cat "$STATE/bluetooth")" ]] && _state=$(cat "$STATE/bluetooth")
-            wifi ${_state:-on}
+            bluetooth ${_state:-on}
             ;;
     esac
 }
@@ -237,7 +237,7 @@ Log () { logger "SYSTEM ACTION: $* (${FUNCNAME[1]})"; }
 
 if [[ -n $ROOTMODE ]]
 then
-    Notify () { logger "$*"; su $USER -c "notify-send \"$*\""; }
+    Notify () { logger "$*"; su ${USER:-} -c "notify-send \"$*\""; }
 else
     Notify () { logger "$*"; notify-send "$*"; }
 fi
