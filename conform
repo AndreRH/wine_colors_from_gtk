@@ -252,6 +252,7 @@ lnup $PATH_SEC/fonts			.fonts
 
 # misc apps ------------------------------------------------------------
 lnup $PATH_ETC/xorg/gromit-mpx.cfg	.gromit-mpx.cfg
+lnup $PATH_ETC/utils/taskrc             .taskrc
 
 
 # ======================================================================

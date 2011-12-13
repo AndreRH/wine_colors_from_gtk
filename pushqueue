@@ -1,0 +1,4 @@
+#!/bin/bash
+
+# push queued files in $HOME/var/queue (consider moving this reference XDG data 
+# dir). Handles mail, googlecl calendar files, tasks, etc.

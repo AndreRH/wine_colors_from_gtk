@@ -1,0 +1,14 @@
+_capture_dir="$HOME/tmp/screenshots"
+_scrot_filename="$(hostname)_%Y-%m-%d-%T_\$wx\$h.png"
+_scrot_cmd="xdotool key "Ctrl+F9" && \
+            mv \$f $HOME/tmp/screenshots/ && \
+            su -c \"\google picasa post 'Screenshots' /home/$USER/tmp/screenshots/\$f && rm /home/$USER/tmp/screenshots/\$f \" es"
+	case $1 in
+	    start)
+		xdotool key "Shift+F9" "F9";
+		;;
+	    finish)
+		[[ ! -d "$_capture_dir" ]] && mkdir -p "$_capture_dir" && chmod 755 $_capture_dir && chown $USER:users $_capture_dir
+		scrot "$_scrot_filename" -e "$_scrot_cmd"
+		;;
+	esac
