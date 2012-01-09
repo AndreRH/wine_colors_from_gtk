@@ -2,6 +2,8 @@
 
 # handles all hardware related events (acpi, udev) and can be called to execute 
 # hardware related actions (from a window manager for example)
+#
+# can be triggered by udev rules, acpi events, wm scripts, cron, etc.
 
 # ----------------------------------------------------------------------
 # Globals
@@ -17,7 +19,7 @@ VIDEOPATH=/sys/class/backlight/acpi_video0
 INTERNAL_DISPLAY=LVDS1
 
 # ----------------------------------------------------------------------
-# Find X User
+# Find User & Environment Variables
 # ----------------------------------------------------------------------
 
 if [[ -z ${USER:-} ]];
@@ -37,12 +39,17 @@ fi
 
 system ()
 {
+    # it's possible that these should just be top level, e.g. "execute sleep"
     case $1 in
-        sleep) echo -n mem >/sys/power/state; power auto; sleep 5; display auto; Notify "AWAKE"; ;;
-        poweroff|shutdown) power max; poweroff ;;
-        reboot) power max; reboot ;;
+        sleep)
+            echo -n mem >/sys/power/state;
+            # following post resume
+            power auto; sleep 5; display auto; Notify "AWAKE"; ;;
+        poweroff|off|shutdown) power max; poweroff ;;
+        reboot|restart) power max; reboot ;;
         hibernate) return ;; # TODO: encrypted swap hibernate support
         boot) wireless restore; power auto; ;;
+        xboot) display auto; ;;
         consolelock) physlock -dsu $USER ;;
         lock) xscreensaver-command -lock ;;
         unlock) xscreensaver-command -deactivate ;;
@@ -53,6 +60,7 @@ power ()
 {
     case $* in
         auto)
+            # based on AC connection status
             [[ $(cat /sys/class/power_supply/AC/online) > 0 ]] \
             && power max || power min; return ;;
         toggle)
@@ -160,8 +168,10 @@ bluetooth ()
 audio ()
 {
     case $* in
-        output\ volume\ up) amixer set Master 5%+ unmute -q ;;
-        output\ volume\ down) amixer set Master 5%- unmute -q ;;
+#        output\ volume\ up) amixer set Master 5%+ unmute -q ;;
+#        output\ volume\ down) amixer set Master 5%- unmute -q ;;
+        output\ volume\ up) amixer set PCM 5%+ unmute -q ;;
+        output\ volume\ down) amixer set PCM 5%- unmute -q ;;
         output\ mute) amixer set Master mute -q ;;
         output\ unmute) amixer set Master unmute -q ;;
         output\ toggle) amixer set Master toggle -q ;;
@@ -201,10 +211,15 @@ input ()
 
 display ()
 {
-    logger "IN DISPLAY"
+    logger "IN DISPLAY WITH $*"
     case $* in
 
+        auto) _Display_Check_Cycle; return ;;
+        cycle) Notify "Display Cycle"; _Display_Check_Cycle; return ;;
+
         rotate) ;;
+        rotate\ external) ;;
+        rotate\ internal) ;;
         invert) ;;
         mode\ tablet) ;;
         mode\ laptop) ;;
@@ -212,8 +227,11 @@ display ()
         annotate) ;;
         screenshot) ;;
 
-        auto) _Display_Check_Cycle; return ;;
-        mode\ cycle) _Display_Check_Cycle; return ;;
+        mode\ cycle) return ;; #_Display_Check_Cycle; return ;;
+
+        external) Notify "Display External"; _Display_Multi_Output_External_Only; return ;;
+        internal) Notify "Display Internal"; _Display_Multi_Output_Internal_Only; return ;;
+        mirror) Notify "Display Mirror"; _Display_Multi_Output_Scaled_Mirror; return ;;
 
         brightness\ up) ;;
         brightness\ down) ;;
@@ -387,8 +405,8 @@ _Display_Check_Cycle ()
 
         # display modes for use with external display
         _display_modes=("multi output external only"
-                        "multi output external above"
                         "multi output scaled mirror"
+                        "multi output external above"
                         "multi output internal only")
 
         if [[ ! -f "$STATE/display" ]] || [[ -z "$(cat "$STATE/display")" ]]
