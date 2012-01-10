@@ -167,6 +167,7 @@ bluetooth ()
 
 audio ()
 {
+    _vol_inc=2
     case $* in
 #        output\ volume\ up) amixer set Master 5%+ unmute -q ;;
 #        output\ volume\ down) amixer set Master 5%- unmute -q ;;
@@ -175,13 +176,13 @@ audio ()
 #        output\ toggle) amixer set Master toggle -q ;;
         output\ volume\ up)
             Is_True $ROOTMODE \
-            && su ${USER:-} -c "/usr/bin/pamixer --increase 10 --unmute" \
-            || /usr/bin/pamixer --increase 10 --unmute
+            && su ${USER:-} -c "/usr/bin/pamixer --increase $_vol_inc --unmute" \
+            || /usr/bin/pamixer --increase $_vol_inc --unmute
             ;;
         output\ volume\ down)
             Is_True $ROOTMODE \
-            && su ${USER:-} -c "/usr/bin/pamixer --decrease 10 --unmute" \
-            || /usr/bin/pamixer --decrease 10 --unmute
+            && su ${USER:-} -c "/usr/bin/pamixer --decrease $_vol_inc  --unmute" \
+            || /usr/bin/pamixer --decrease $_vol_inc --unmute
             ;;
         output\ mute)
             Is_True $ROOTMODE \
