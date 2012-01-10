@@ -170,11 +170,42 @@ audio ()
     case $* in
 #        output\ volume\ up) amixer set Master 5%+ unmute -q ;;
 #        output\ volume\ down) amixer set Master 5%- unmute -q ;;
-        output\ volume\ up) amixer set PCM 5%+ unmute -q ;;
-        output\ volume\ down) amixer set PCM 5%- unmute -q ;;
-        output\ mute) amixer set Master mute -q ;;
-        output\ unmute) amixer set Master unmute -q ;;
-        output\ toggle) amixer set Master toggle -q ;;
+#        output\ mute) amixer set Master mute -q ;;
+#        output\ unmute) amixer set Master unmute -q ;;
+#        output\ toggle) amixer set Master toggle -q ;;
+        output\ volume\ up)
+            Is_True $ROOTMODE \
+            && su ${USER:-} -c "/usr/bin/pamixer --increase 10 --unmute" \
+            || /usr/bin/pamixer --increase 10 --unmute
+            ;;
+        output\ volume\ down)
+            Is_True $ROOTMODE \
+            && su ${USER:-} -c "/usr/bin/pamixer --decrease 10 --unmute" \
+            || /usr/bin/pamixer --decrease 10 --unmute
+            ;;
+        output\ mute)
+            Is_True $ROOTMODE \
+            && su ${USER:-} -c "/usr/bin/pamixer --mute" \
+            || /usr/bin/pamixer --mute
+            ;;
+        output\ unmute)
+            Is_True $ROOTMODE \
+            && su ${USER:-} -c "/usr/bin/pamixer --unmute" \
+            || /usr/bin/pamixer --unmute
+            ;;
+        output\ toggle)
+            if Is_True $ROOTMODE; then
+                mute_state="$(su $USER -c "/usr/bin/pamixer --get-mute")" || 
+                true
+            else
+                mute_state="$(/usr/bin/pamixer --get-mute)" || true
+            fi
+            if Is_True "$mute_state"; then
+                audio output unmute
+            else
+                audio output mute
+            fi
+            ;;
         output\ switch) ;;
         input\ mute) amixer set Capture mute -q ;;
         input\ unmute) amixer set Capture unmute -q ;;
@@ -262,7 +293,7 @@ fi
 
 Is_True () {
     shopt -s nocasematch;
-    case $1 in 1|y|yes|on|true) return 0 ;; *) return 1 ;; esac;
+    case ${1:-} in 1|y|yes|on|true) return 0 ;; *) return 1 ;; esac;
     shopt -u nocasematch;
 }
 
