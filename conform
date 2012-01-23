@@ -20,6 +20,9 @@ mutt-colors-solarized
 ethanschoonover.com
 vim-colors-solarized
 vim-pandoc-kit
+backpac
+manifest
+arch-by-hand
 "
 # directories to append to paths ---------------------------------------
 WHITE_LIST=".oh-my-zsh" # won't be deleted (-f/-F don't touch these)
@@ -206,7 +209,7 @@ lnup $PATH_ETC/mail/muttrc 		.muttrc
 lnup $PATH_ETC/mail/notmuch-config 	.notmuch-config
 lnup $PATH_ETC/mail/offlineimaprc 	.offlineimaprc 
 lnup $PATH_ETC/mail/queue		.msmtp.queue
-lnup $PATH_ETC/mail/offlineimap	.offlineimap
+lnup $PATH_ETC/mail/offlineimap         .offlineimap
 
 # vim ------------------------------------------------------------------
 lnup $PATH_ETC/vim 			.vim
@@ -220,23 +223,25 @@ lnup $PATH_ETC/xmonad/taffybar		.config/taffybar
 # xorg -----------------------------------------------------------------
 lnup $PATH_ETC/xorg/Xresources		.Xresources
 lnup $PATH_ETC/xorg/xinitrc		.xinitrc
-lnup $PATH_ETC/xorg/xbindkeysrc	.xbindkeysrc
+lnup $PATH_ETC/xorg/xbindkeysrc         .xbindkeysrc
 lnup $PATH_ETC/xorg/gtkrc-2.0		.gtkrc-2.0
+lnup $PATH_ETC/xorg/xscreensaver        .xscreensaver
 
 # security & password related ------------------------------------------
 lnup $PATH_ETC/sec/netrc.pass		.netrc
 
 # irc ------------------------------------------------------------------
 lnup $PATH_ETC/irc/weechat		.weechat
-lnup $PATH_ETC/irc/irssi-config	.irssi/config
+lnup $PATH_ETC/irc/irssi-config         .irssi/config
 
 # web ------------------------------------------------------------------
 lnup $PATH_ETC/sec/gcalclirc.pass	.gcalclirc
 lnup $PATH_ETC/web/googlecl-config	.config/googlecl/config
 lnup $PATH_ETC/web/newsbeuter-config	.newsbeuter/config
+lnup $PATH_ETC/web/pentadactylrc-terminus .pentadactylrc
 
 # vcs ------------------------------------------------------------------
-lnup $PATH_ETC/vcs/hgrc		.hgrc
+lnup $PATH_ETC/vcs/hgrc                 .hgrc
 lnup $PATH_ETC/vcs/gitconfig		.gitconfig
 lnup $PATH_ETC/vcs/gitignore		.gitignore
 
