@@ -516,5 +516,5 @@ cat $0 | grep "^\([[:alpha:]]\w* ()\s*\|\s*[[:alpha:]|_]*)\).*$" | sed "s_\(\s*[
 }
 
 # execute a function if $1 matches
-echo "$function_list" | grep -wq "$1" && $*
+[ -n "${1:-}" ] && echo "$function_list" | grep -wq "$1" && $* || help
 
