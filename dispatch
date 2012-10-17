@@ -10,7 +10,7 @@
 # ----------------------------------------------------------------------
 
 # buckle up
-set -o errexit
+#set -o errexit
 set -o nounset
 
 # to retain state over reboots
@@ -67,7 +67,7 @@ system ()
 
 power ()
 {
-    case $* in
+    case $1 in
         auto)
             # based on AC connection status
             [[ $(cat /sys/class/power_supply/AC/online) > 0 ]] \
@@ -78,63 +78,163 @@ power ()
             power ${_mode[0]}; return
             ;;
         cycle)
-            _mode=(min max mov); _state=$(cat $STATEROOT/power)
+            _mode=(min med max mov); _state=$(cat $STATEROOT/power)
             for _s in $(seq 0 $((${#_mode[@]} - 1)))
             do echo $_s; [[ ${_state:-} == ${_mode[$_s]} ]] \
             && power ${_mode[$(( ++_s % ${#_mode[@]} ))]} && return; done
             power auto; return
             ;;
         min)
-            mode=min
-            cpu_governor=powersave
-            powersave_brute_force=auto
-            wlan_power_save=on
+            nmi_watchdog=false
+            cpu_powersave=true
+            display_powersave=true
+            powersave_bus=true
+            powersave_wacom=true
+            disk_powersave=true
+            wifi_powersave=true
+            pcie_aspm_powersave=true
+            soundcard_powersave=true
+            kernel_write_powersave=true
+            dpms_seconds=60
+            backlight_percent=75
+            ;;
+        med)
+            cpu_powersave=true
+            display_powersave=true
+            powersave_bus=true
+            wifi_powersave=true
+            pcie_aspm_powersave=true
+            soundcard_powersave=true
+            nmi_watchdog=false
+            powersave_wacom=false
+            disk_powersave=false
+            kernel_write_powersave=false
             dpms_seconds=60
             backlight_percent=75
             ;;
         max)
-            mode=max
-            cpu_governor=performance
-            powersave_brute_force=on
-            wlan_power_save=off
+            nmi_watchdog=true
+            cpu_powersave=false
+            display_powersave=false
+            powersave_bus=false
+            powersave_wacom=false
+            disk_powersave=false
+            wifi_powersave=false
+            pcie_aspm_powersave=false
+            soundcard_powersave=false
+            kernel_write_powersave=false
             dpms_seconds=600
             backlight_percent=100
             ;;
         mov)
-            mode=mov
-            cpu_governor=ondemand
-            powersave_brute_force=on
-            wlan_power_save=off
+            nmi_watchdog=true
+            cpu_powersave=false
+            display_powersave=false
+            powersave_bus=false
+            powersave_wacom=false
+            disk_powersave=false
+            wifi_powersave=false
+            pcie_aspm_powersave=false
+            soundcard_powersave=false
+            kernel_write_powersave=false
             dpms_seconds=600
             backlight_percent=100
             ;;
         *) return ;;
     esac
 
+    # c.f. https://lesswatts.org/tips
+
+    # DISPLAY ---------------------------------------------------------
+
+    mode=$1 # e.g. min, max
+
+    # DISPLAY ---------------------------------------------------------
+
     current_brightness=$(cat $VIDEOPATH/actual_brightness)
     full_brightness=$(cat $VIDEOPATH/max_brightness)
     new_brightness=$(((${backlight_percent}*${full_brightness})/100))
     [[ $current_brightness -gt $new_brightness ]] && _sign="-"
     for _b in $(seq $current_brightness ${_sign:-}1 $new_brightness)
-    do echo -n $_b > $VIDEOPATH/brightness; sleep 0.015; done
+    do sudo echo -n $_b > $VIDEOPATH/brightness; sleep 0.015; done
 
-    for cpu in 0 1 2 3; do cpufreq-set -c $cpu -g $cpu_governor; done
-    for _control in /sys/bus/{usb,pci,i2c,spi}/devices/*/power/control;
-    do
-        if [[ -f "$_control" ]]
-        then
-            # block wacom tablet from being powersaved
-            _mfgr=$(dirname $(dirname $_control))/manufacturer
-            [[ ! -f "$_mfgr" || $(cat "$_mfgr") != "Tablet" ]] \
-                && echo $powersave_brute_force > $_control
-        fi
+    $display_powersave && _rc6=1 _fbc=1 || _rc6=0 _fbc=-1
+    _param_root="/sys/module/i915/parameters/"
+    for _param_set in "i915_enable_rc6 $_rc6" "i915_enable_fbc $_fbc"; do
+        set $_param_set; _param=$1 _paramval=$2
+        [ "$(stat --format "%a" "${_param_root}${_param}")" -ge 600 ] && sudo echo -n $_paramval > "${_param_root}${_param}"
     done
 
-    iw wlan0 set power_save $wlan_power_save
-    xset dpms 0 0 $dpms_seconds 2>/dev/null
+    xset dpms 0 0 $dpms_seconds &>/dev/null
 
-    echo -n $mode > $STATEROOT/power
-    Notify "$mode power mode"
+    # PCIE_ASPM -------------------------------------------------------
+    # default|performance|powersave
+    $pcie_aspm_powersave && _pcie_aspm=powersave || _pcie_aspm=performance
+    sudo echo -n $_pcie_aspm > "/sys/module/pcie_aspm/parameters/policy"
+
+    # BUS -------------------------------------------------------------
+    $powersave_bus && _bus=auto || _bus=on
+    $powersave_wacom && _wacom=auto || _wacom=on
+    for _path in /sys/bus/*/devices/*; do
+       _pwr=$_bus; [[ -f "$_path/manufacturer" && "$(cat "$_path/manufacturer")" == "Tablet" ]] && _pwr=$_wacom
+       [[ -f "$_path/power/control" ]] && sudo echo -n $_pwr > "$_path/power/control"
+    done
+
+    # CPU -------------------------------------------------------------
+    # powersave | ondemand | performance
+    # check with `cat /sys/devices/system/cpu/cpu0/cpufreq/scaling_available_governors`
+    # check current with `cat /sys/devices/system/cpu/cpu0/cpufreq/scaling_governor`
+    # useful: https://wiki.archlinux.org/index.php/User:Stefanwilkens
+    $cpu_powersave && _governor=powersave _sched=1 || _governor=performance _sched=0
+    sudo cpupower -c all frequency-set -g $_governor &>/dev/null
+    # Multi-core scheduler power saving
+    _param_root=/sys/devices/system/cpu/
+    for _param in sched_mc_power_savings sched_smt_power_savings; do
+        [ -f "${_param_root}${_param}" ] && sudo echo -n $_sched > "${_param_root}${_param}" 
+    done
+
+    # WIFI ------------------------------------------------------------
+    $wifi_powersave && _wifi=on _wifipwr=Y || _wifi=off _wifipwr=N;
+    sudo iw dev wlan0 set power_save $_wifi &>/dev/null
+    # HANDLED IN /etc/modprobe.d/iwlwifi.conf now # sudo echo -n $_wifipwr > /sys/module/iwlwifi/parameters/power_save
+
+    # KERNEL WRITE MODES ----------------------------------------------
+    # TODO: consider increasing writeback to > 1500
+    if $kernel_write_powersave; then
+        sudo sysctl -q vm.laptop_mode=5 \
+            vm.dirty_ratio=60 \
+            vm.dirty_background_ratio=40 \
+            vm.dirty_expire_centisecs=3000 \
+            vm.dirty_writeback_centisecs=1500
+    else
+        sudo sysctl -q vm.laptop_mode=0 \
+            vm.dirty_ratio=10 \
+            vm.dirty_background_ratio=5 \
+            vm.dirty_expire_centisecs=3000 \
+            vm.dirty_writeback_centisecs=500
+    fi
+
+    # SOUND CARD --------------------------------------------------------
+    $soundcard_powersave && _snd=1 _sndcnt=Y || _snd=0 _sndcnt=N
+    sudo echo -n $_snd > /sys/module/snd_hda_intel/parameters/power_save
+    sudo echo -n $_sndcnt > /sys/module/snd_hda_intel/parameters/power_save_controller
+
+    # DISK POWERSAVING ------------------------------------------------
+    # aggressive disk powersave after 60 sec
+    # -B 1=maximum power saving / 254=no power saving
+    # -S 12=spin down after 60 seconds / 0=no spin down
+    $disk_powersave && _B=1 _S=12 _scsipwr=min_power || _B=254 _S=0 _scsipwr=max_performance
+    for _disk in /dev/sd?; do sudo hdparm -i $_disk | egrep -i -q "AdvancedPM\s*=\s*yes" && sudo hdparm -B $_B -S $_S $_disk &>/dev/null || true; done
+    for _scsi in /sys/class/scsi_host/*/link_power_management_policy; do sudo echo -n $_scsipwr > "$_scsi"; done
+    # TODO: consider adding blockdev --setra value for readahead control?
+
+    # NMI WATCHDOG ----------------------------------------------------
+    $nmi_watchdog && _nmi=1 || _nmi=0; sudo sysctl -q kernel.nmi_watchdog=$_nmi
+
+    # RECORD STATE ----------------------------------------------------
+    sudo echo -n $1 > $STATEROOT/power
+
+    Notify "$1 power mode"
 
 }
 
@@ -177,10 +277,12 @@ wireless ()
 
 volume ()
 {
-    _vol_inc=2
+    _adj=1 # used if no value supplied, e.g. volume up OR volume up 10
     case $1 in
-        up) $ALSA && amixer set Master 5%+ unmute -q || /usr/bin/pamixer --increase $_vol_inc --unmute ;;
-        down) $ALSA && amixer set Master 5%- unmute -q || /usr/bin/pamixer --decrease $_vol_inc --unmute ;;
+        up) $ALSA && amixer set Master ${2:-$_adj}%+ unmute -q || /usr/bin/pamixer --increase $_adj --unmute ;;
+        mid) $ALSA && amixer set Master 75% unmute -q || true ;;
+        max) $ALSA && amixer set Master 100% unmute -q || true ;;
+        down) $ALSA && amixer set Master ${2:-$_adj}%- unmute -q || /usr/bin/pamixer --decrease $_adj --unmute ;;
         mute) $ALSA && amixer set Master mute -q || /usr/bin/pamixer --mute ;;
         unmute) $ALSA && amixer set Master unmute -q || /usr/bin/pamixer --unmute ;;
         toggle) if $ALSA; then amixer set Master toggle -q :; else $(/usr/bin/pamixer --get-mute) && volume unmute || volume mute; fi  ;;
@@ -377,6 +479,17 @@ _Display_State ()
 
 }
 
+keyboard ()
+{
+    if ! xdotool search --classname "onboard" &>/dev/null;then
+        onboard &
+        sleep 1
+        xdotool search --classname "onboard" windowsize %@ 48 48 windowmove %@ 1308 30
+    else
+        xdotool search --classname "onboard" windowraise %@
+    fi
+}
+
 _Display_Kill_Zombies ()
 {
     _Display_State
@@ -516,5 +629,5 @@ cat $0 | grep "^\([[:alpha:]]\w* ()\s*\|\s*[[:alpha:]|_]*)\).*$" | sed "s_\(\s*[
 }
 
 # execute a function if $1 matches
-[ -n "${1:-}" ] && echo "$function_list" | grep -wq "$1" && $* || help
+if [ -n "${1:-}" ] && echo "$function_list" | grep -wq "$1"; then $*; else help; fi
 
