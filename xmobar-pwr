@@ -1,0 +1,2 @@
+#!/bin/bash
+cat /var/tmp/power | tr [a-z] [A-Z]
