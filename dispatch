@@ -185,13 +185,18 @@ power ()
     # check with `cat /sys/devices/system/cpu/cpu0/cpufreq/scaling_available_governors`
     # check current with `cat /sys/devices/system/cpu/cpu0/cpufreq/scaling_governor`
     # useful: https://wiki.archlinux.org/index.php/User:Stefanwilkens
-    $cpu_powersave && _governor=powersave _sched=1 || _governor=performance _sched=0
+    # sched values:
+    # 0 - No power saving load balance (default value)
+    # 1 - Fill one thread/core/package first for long running threads
+    # 2 - Also bias task wakeups to semi-idle cpu package for power savings
+    $cpu_powersave && _governor=powersave _sched=2 _perfbias=15 || _governor=performance _sched=0 _perfbias=0
+    # cpu governor
     sudo cpupower -c all frequency-set -g $_governor &>/dev/null
-    # Multi-core scheduler power saving
-    _param_root=/sys/devices/system/cpu/
-    for _param in sched_mc_power_savings sched_smt_power_savings; do
-        [ -f "${_param_root}${_param}" ] && sudo echo -n $_sched > "${_param_root}${_param}" 
-    done
+    # cpu performance bias
+    sudo cpupower -c all set -b $_perfbias &>/dev/null
+    # multi-core scheduler power saving
+    sudo cpupower -c all set --sched-mc $_sched # &>/dev/null
+    sudo cpupower -c all set --sched-smt $_sched # &>/dev/null
 
     # WIFI ------------------------------------------------------------
     $wifi_powersave && _wifi=on _wifipwr=Y || _wifi=off _wifipwr=N;
