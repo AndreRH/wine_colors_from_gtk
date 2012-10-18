@@ -1,0 +1,319 @@
+#!/bin/bash
+
+# reup/lnup paths are considered to be $HOME relative
+
+bar="------------------------------------"
+echo "$bar$bar"
+
+
+# ======================================================================
+# CONFIGURATION
+# ======================================================================
+
+# root paths -----------------------------------------------------------
+ROOT_PATH=$HOME
+ROOT_DIRS=(anx bin etc ref sec shr tmp wrk var)
+
+WORK_REPOS="
+solarized
+mutt-colors-solarized
+ethanschoonover.com
+vim-colors-solarized
+vim-pandoc-kit
+backpac
+manifest
+arch-by-hand
+"
+# directories to append to paths ---------------------------------------
+WHITE_LIST=".oh-my-zsh" # won't be deleted (-f/-F don't touch these)
+GREY_LIST=".cache .config .local" # -F will delete these; -f won't
+# TODO: reassign XDG env variables and then get rid of these
+
+
+# ======================================================================
+# FUNCTIONS
+# ======================================================================
+
+conlog () { local report="CONFORM $*"; logger $report; echo "$report"; }
+
+istrue ()
+{
+shopt -s nocasematch; case $1 in 1|yes|true) return 0 ;; *) return 1 ;;
+esac; shopt -u nocasematch;
+}
+
+trup () { echo -n "$*" | tr '[:lower:]' '[:upper:]'; }
+
+normalize ()
+{
+local newpath="${1#\~/}";
+newpath="${newpath#$ROOT_PATH/}"; newpath="$ROOT_PATH/$newpath";
+echo -n "$newpath";
+}
+
+trash () 
+{
+local source_path=$1
+local trash_path="$PATH_TMP/trash/conform/${source_path#$ROOT_PATH/}"
+[[ -d "$source_path" ]] \
+&& install -dD --backup=simple \
+   --suffix="-$(date +%F-%s)" "$source_path" "$trash_path" \
+|| install -D --backup=simple \
+   --suffix="-$(date +%F-%s)" "$source_path" "$trash_path"
+rm -rf $source_path && conlog "OK: $source_path moved to $trash_path"
+}
+
+reup () # repository update $1:remotepath $2:localpath
+{
+cd $ROOT_PATH
+local rpath="$1"
+lpath=$(normalize "$2")
+if [[ ! -d "$lpath" ]];
+then
+   git clone "$rpath" "$lpath" \
+   && (conlog "OK: cloned $rpath to $lpath"; return 0) \
+   || (conlog "FAILURE: failed clone $rpath to $lpath"; return 1);
+elif cd "$lpath" && istrue $UPDATE;
+then
+   git pull \
+   && (conlog "OK: repo in $lpath updated"; return 0) \
+   || (conlog "FAILURE: repo in $lpath failed"; return 1);
+elif cd "$lpath" && git status &>/dev/null;
+then
+   conlog "OK: repo $lpath present not updated (\$UPDATE false)";
+else
+   conlog "FAILURE: $lpath not a repo for $rpath (rm it to try again)"
+fi
+}
+
+lnup () # link update $1:sourcefile $2:linktarget
+{
+local sourcefile="$(normalize $1)"; local linktarget="$(normalize $2)";
+# cd $ROOT_PATH; # not required now
+[[ -e "$linktarget" && ! -h "$linktarget" ]] && trash "$linktarget"
+[[ ! -d $(dirname $linktarget) ]] && mkdir -p $(dirname $linktarget)
+if [[ -h "$linktarget" && "$sourcefile" != "$(readlink $linktarget)" ]]
+then rm "$linktarget" && conlog "FIXED: repaired link $linktarget"; fi
+ln -nfs "$sourcefile" "$linktarget" \
+|| conlog "FAILURE: failed link: $linktarget source file: $sourcefile";
+LINKS_LIST+="$linktarget "
+}
+
+dirup () # directory update
+{
+for item in $*; do mkdir -p $item; DIRS_LIST+="$item "; done
+}
+
+inlist ()
+{
+match=1; checkval="$1"; shift; checklist="$*"
+for item in $checklist;
+do
+	clean_item=${item#$ROOT_PATH/}
+	#[[ "$checkval" == "$clean_item" ]] && match=0;
+	#[[ $(expr match "$clean_item" "$checkval/") > 0 ]] && match=0;
+	[[ $clean_item =~ ^$checkval ]] && match=0
+done
+return $match
+}
+
+
+# ======================================================================
+# DEFAULTS & PARAMETERS
+# ======================================================================
+
+# home root directories ------------------------------------------------
+for dirname in ${ROOT_DIRS[*]};
+do eval "PATH_$(trup $dirname)=$ROOT_PATH/$dirname"; done
+
+# special temp directories ---------------------------------------------
+TEMP_SCREENSHOTS=$PATH_TMP/screenshots
+TEMP_DOWNLOADS=$PATH_TMP/downloads
+TEMP_TRASH=$PATH_TMP/trash
+
+# default option values ------------------------------------------------
+CLEAN= ;
+TRASH= ;
+CLEAN_WITH_EXTREME_PREJUDICE= ;
+COMPLETE_DESTRUCTION= ;
+
+# process opts ---------------------------------------------------------
+while getopts ":cCtT" option
+do
+case $option in
+c) CLEAN=1;
+    conlog "EXECUTING: conform in CLEAN mode (greylist preserved).";;
+C) CLEAN=1; CLEAN_WITH_EXTREME_PREJUDICE=1;
+    conlog "EXECUTING: conform in FULL CLEAN mode (greylist removed).";;
+t) TRASH=1; ;;
+T) TRASH=1; COMPLETE_DESTRUCTION=1; ;;
+esac
+done
+
+
+# ======================================================================
+# REPOSITORIES
+# ======================================================================
+conlog "STAGE: Conforming repositories..."
+
+# core repos -----------------------------------------------------------
+#reup git@github.com:altercation/es-anx.git $PATH_ANX
+#reup git@github.com:altercation/es-dotfiles.git $PATH_ETC
+reup git@github.com:altercation/es-bin.git $PATH_BIN
+reup git@github.com:altercation/es-etc.git $PATH_ETC
+reup git@github.com:altercation/es-sec.git $PATH_SEC
+
+# work repos -----------------------------------------------------------
+for r in $WORK_REPOS
+do reup git@github.com:altercation/$r.git $PATH_WRK/$r; done
+
+# utility repos --------------------------------------------------------
+reup https://github.com/robbyrussell/oh-my-zsh.git $ROOT_PATH/.oh-my-zsh
+
+
+# ======================================================================
+# DIRECTORIES
+# ======================================================================
+conlog "STAGE: Conforming directories..."
+
+# core -----------------------------------------------------------------
+for rootdir in ${!PATH_*}; do dirup ${!rootdir}; done
+
+# mail, contacts, calendar ---------------------------------------------
+# TODO: what am I using temp for here?
+dirup $PATH_VAR/mail/{accounts,cache,queue,log,temp,offlineimap}
+dirup $PATH_VAR/contacts/archived
+dirup $PATH_VAR/calendar
+
+# temp -----------------------------------------------------------------
+dirup $TEMP_SCREENSHOTS
+dirup $TEMP_DOWNLOADS
+dirup $TEMP_TRASH
+
+# apps -----------------------------------------------------------------
+dirup $PATH_VAR/vim/{backup,swap}
+dirup $ROOT_PATH/.newsbeuter
+
+# system ---------------------------------------------------------------
+dirup $ROOT_PATH/.ssh
+
+
+# ======================================================================
+# LINKS
+# ======================================================================
+conlog "STAGE: Conforming links..."
+
+# mail -----------------------------------------------------------------
+lnup $PATH_ETC/mail/msmtprc 		.msmtprc
+lnup $PATH_ETC/mail/muttrc 		.muttrc
+lnup $PATH_ETC/mail/notmuch-config 	.notmuch-config
+lnup $PATH_ETC/mail/offlineimaprc 	.offlineimaprc 
+lnup $PATH_ETC/mail/queue		.msmtp.queue
+lnup $PATH_ETC/mail/offlineimap         .offlineimap
+
+# vim ------------------------------------------------------------------
+lnup $PATH_ETC/vim 			.vim
+lnup $PATH_ETC/vim/vimrc 		.vimrc
+
+# xmonad ---------------------------------------------------------------
+lnup $PATH_ETC/xmonad			.xmonad
+lnup $PATH_ETC/xmonad/xmobarrc		.xmobarrc
+lnup $PATH_ETC/xmonad/taffybar		.config/taffybar
+
+# xorg -----------------------------------------------------------------
+lnup $PATH_ETC/xorg/Xresources		.Xresources
+lnup $PATH_ETC/xorg/xinitrc		.xinitrc
+lnup $PATH_ETC/xorg/xbindkeysrc         .xbindkeysrc
+lnup $PATH_ETC/xorg/gtkrc-2.0		.gtkrc-2.0
+lnup $PATH_ETC/xorg/xscreensaver        .xscreensaver
+
+# security & password related ------------------------------------------
+lnup $PATH_ETC/sec/netrc.pass		.netrc
+
+# irc ------------------------------------------------------------------
+lnup $PATH_ETC/irc/weechat		.weechat
+lnup $PATH_ETC/irc/irssi-config         .irssi/config
+
+# web ------------------------------------------------------------------
+lnup $PATH_ETC/sec/gcalclirc.pass	.gcalclirc
+lnup $PATH_ETC/web/googlecl-config	.config/googlecl/config
+lnup $PATH_ETC/web/newsbeuter-config	.newsbeuter/config
+lnup $PATH_ETC/web/pentadactylrc-terminus .pentadactylrc
+
+# vcs ------------------------------------------------------------------
+lnup $PATH_ETC/vcs/hgrc                 .hgrc
+lnup $PATH_ETC/vcs/gitconfig		.gitconfig
+lnup $PATH_ETC/vcs/gitignore		.gitignore
+
+# shell ----------------------------------------------------------------
+# TODO: confirm that the following are the minimum required
+lnup $PATH_ETC/shell/profile		.profile
+lnup $PATH_ETC/shell/profile		.zshrc
+lnup $PATH_ETC/shell/profile		.zprofile
+
+# fonts ----------------------------------------------------------------
+# TODO: move this into sec
+lnup $PATH_SEC/fonts			.fonts
+
+# misc apps ------------------------------------------------------------
+lnup $PATH_ETC/xorg/gromit-mpx.cfg	.gromit-mpx.cfg
+lnup $PATH_ETC/utils/taskrc             .taskrc
+
+
+# ======================================================================
+# CRON
+# ======================================================================
+# TODO: update cron?
+
+
+# ======================================================================
+# PERMISSIONS
+# ======================================================================
+conlog "STAGE: Conforming permissions..."
+chmod go-rwx $PATH_ETC/mail/msmtprc &>/dev/null     # msmtp requirement
+chmod go-rwx $PATH_ETC/sec/*.pass &>/dev/null	     # be safe
+
+
+# ======================================================================
+# HOUSEKEEPING
+# ======================================================================
+conlog "STAGE: Performing housekeeping..."
+cd $ROOT_PATH
+entries=$(ls -a $ROOT_PATH)
+! istrue $CLEAN_WITH_EXTREME_PREJUDICE && DIRS_LIST+="$GREY_LIST"
+KNOWN_PATHS="$DIRS_LIST $LINKS_LIST $WHITE_LIST"
+for entry in $entries;
+do
+	entry_path=$ROOT_PATH/$entry
+	if [[ -d "$entry_path" ]]
+	then
+		[[ -n ${entry//./} ]] \
+		&& ! inlist $entry $KNOWN_PATHS \
+		&& CLUTTER_DIRS+="$entry "
+	elif [[ -h "$entry_path" ]]
+	then
+		! inlist $entry $KNOWN_PATHS \
+		&& CLUTTER_LINKS+="$entry "
+	elif [[ -f "$entry_path" ]]
+	then
+		CLUTTER_FILES+="$entry "
+	else
+		CLUTTER_UNKNOWN+="$entry "
+	fi
+done
+echo "$bar$bar"
+for listname in ${!CLUTTER_*}; do
+istrue $CLEAN \
+	&& for item in ${!listname}; do trash $item; done \
+	|| ([[ -n ${!listname} ]] && echo "$listname: ${!listname}")
+done
+if istrue $TRASH
+then
+    istrue $COMPLETE_DESTRUCTION \
+        && trash_list="${!TEMP_*}" \
+        || trash_list="TEMP_TRASH"
+    for t in $trash_list; do
+        rm -rf ${!t} && dirup ${!t} && conlog "OK: ${!t} emptied"
+    done
+fi
+echo "$bar$bar"
