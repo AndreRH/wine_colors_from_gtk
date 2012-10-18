@@ -11,7 +11,7 @@
 
 # buckle up
 #set -o errexit
-set -o nounset
+#set -o nounset
 
 # to retain state over reboots
 STATEROOT=/var/tmp
@@ -47,15 +47,20 @@ fi
 # ----------------------------------------------------------------------
 
 system ()
-{
+{ 
     # it's possible that these should just be top level, e.g. "execute sleep"
     case $1 in
         sleep)
-            echo -n mem >/sys/power/state;
+            power max
+            systemctl suspend
             # following post resume
-            power auto; sleep 5; display auto; Notify "AWAKE"; ;;
-        poweroff|off|shutdown) power max; poweroff ;;
-        reboot|restart) power max; reboot ;;
+            power auto 
+            #display auto;
+            echo "post display auto"
+            #Notify "AWAKE";
+            ;;
+        poweroff|off|shutdown) power preshutdown; rmmod e1000e; systemctl poweroff ;;
+        reboot|restart) power preshutdown; systemctl reboot ;;
         hibernate) return ;; # TODO: encrypted swap hibernate support
         boot) wireless restore; power auto; ;;
         xboot) display auto; ;;
@@ -67,12 +72,12 @@ system ()
 
 power ()
 {
-    mode=
     case $1 in
         auto)
             # based on AC connection status
             [[ $(cat /sys/class/power_supply/AC/online) > 0 ]] \
-            && power max || power min; return || echo "FAILED HERE TOO"
+            && power max || power min;
+            return
             ;;
         toggle)
             _mode=(min max); _state=$(cat $STATEROOT/power)
@@ -86,7 +91,7 @@ power ()
                     _post=; power ${_mode[$(( ++_s % ${#_mode[@]} ))]} && break;
                 fi
             done
-	    eval "$_post"; exit
+	    eval "$_post"; return
             ;;
         min)
             mode=min
@@ -119,7 +124,7 @@ power ()
             backlight_percent=75
             ;;
         max)
-            mode=max
+            mode=${mode:-max}
             nmi_watchdog=true
             cpu_powersave=false
             display_powersave=false
@@ -148,13 +153,18 @@ power ()
             dpms_seconds=600
             backlight_percent=100
             ;;
+        preshutdown) # pre shutdown/suspend
+            mode=preshutdown
+            power max
+            return
+            ;;
         *) return ;;
     esac
 
     # c.f. https://lesswatts.org/tips
 
+if [[ "${mode:0:3}" != "pre" ]]; then # preshutdown
     # DISPLAY ---------------------------------------------------------
-
     current_brightness=$(cat $VIDEOPATH/actual_brightness)
     full_brightness=$(cat $VIDEOPATH/max_brightness)
     new_brightness=$(((${backlight_percent}*${full_brightness})/100))
@@ -162,23 +172,28 @@ power ()
     for _b in $(seq $current_brightness ${_sign:-}1 $new_brightness)
     do sudo echo -n $_b > $VIDEOPATH/brightness; sleep 0.015; done
 
-    $display_powersave && _rc6=1 _fbc=1 || _rc6=0 _fbc=-1
-    _param_root="/sys/module/i915/parameters/"
-    for _param_set in "i915_enable_rc6 $_rc6" "i915_enable_fbc $_fbc"; do
-        set $_param_set; _param=$1 _paramval=$2
-        [ "$(stat --format "%a" "${_param_root}${_param}")" -ge 600 ] && sudo echo -n $_paramval > "${_param_root}${_param}"
-    done
+    # Don't reenable this section with out changing the way that the
+    # param/value pairs are passed... using set screws up recursive
+    # calls to power.
+    #$display_powersave && _rc6=1 _fbc=1 || _rc6=0 _fbc=-1
+    #_param_root="/sys/module/i915/parameters/"
+    #for _param_set in "i915_enable_rc6 $_rc6" "i915_enable_fbc $_fbc"; do
+    #    set $_param_set; _param=$1 _paramval=$2
+    #    [ "$(stat --format "%a" "${_param_root}${_param}")" -ge 600 ] && sudo echo -n $_paramval > "${_param_root}${_param}"
+    #done
 
     xset dpms 0 0 $dpms_seconds &>/dev/null
+fi
 
     # PCIE_ASPM -------------------------------------------------------
-    # default|performance|powersave
-    $pcie_aspm_powersave && _pcie_aspm=powersave || _pcie_aspm=performance
-    sudo echo -n $_pcie_aspm > "/sys/module/pcie_aspm/parameters/policy"
 
     # BUS -------------------------------------------------------------
     $powersave_bus && _bus=auto || _bus=on
     $powersave_wacom && _wacom=auto || _wacom=on
+
+    $pcie_aspm_powersave && _pcie_aspm=powersave || _pcie_aspm=performance # default|performance|powersave
+    sudo echo -n $_pcie_aspm > "/sys/module/pcie_aspm/parameters/policy"
+
     #not sure about the other buses, so just going for pci/usb
     #for _path in /sys/bus/*/devices/*/power/control; do
     for _path in /sys/bus/{pci,usb}/devices/*/power/control; do
@@ -234,6 +249,7 @@ power ()
     sudo echo -n $_snd > /sys/module/snd_hda_intel/parameters/power_save
     sudo echo -n $_sndcnt > /sys/module/snd_hda_intel/parameters/power_save_controller
 
+if [[ "${mode:0:3}" != "pre" ]]; then # preshutdown
     # DISK POWERSAVING ------------------------------------------------
     # aggressive disk powersave after 60 sec
     # -B 1=maximum power saving / 254=no power saving
@@ -242,13 +258,18 @@ power ()
     for _disk in /dev/sd?; do sudo hdparm -i $_disk | egrep -i -q "AdvancedPM\s*=\s*yes" && sudo hdparm -B $_B -S $_S $_disk &>/dev/null || true; done
     for _scsi in /sys/class/scsi_host/*/link_power_management_policy; do sudo echo -n $_scsipwr > "$_scsi"; done
     # TODO: consider adding blockdev --setra value for readahead control?
+fi
 
     # NMI WATCHDOG ----------------------------------------------------
     $nmi_watchdog && _nmi=1 || _nmi=0; sudo sysctl -q kernel.nmi_watchdog=$_nmi
 
+if [[ "${mode:0:3}" != "pre" ]]; then # preshutdown
     # RECORD STATE ----------------------------------------------------
     sudo echo -n $mode > $STATEROOT/power
-    sudo chmod a+w $STATEROOT/power
+    sudo chmod a+rw $STATEROOT/power
+else
+    [ -f "$STATEROOT/power" ] && sudo rm $STATEROOT/power
+fi
 
     #Notify "$1 power mode"
 
@@ -403,8 +424,8 @@ _Debug ()
     # quick debug function, better info than "caller"
     # called without parameters at top of function; reports where it was called 
     # from (calling function and line number)
-    [[ ${1:-} ]] && local with_args=" with arguments \"$@\"" || local with_args=""
-    echo "FUNCTION: ${FUNCNAME[1]}() line ${BASH_LINENO[0]} called by ${FUNCNAME[2]}${with_args} at line ${BASH_LINENO[1]}"
+    [[ ${1:-} ]] && local with_args=" (with arguments \"$@\")" || local with_args=""
+    echo "FUNCTION: ${FUNCNAME[1]}() line ${BASH_LINENO[0]} called by ${FUNCNAME[2]} at line ${BASH_LINENO[1]}${with_args}"
 }
 
 declare -ag _notifications=()
@@ -646,6 +667,8 @@ help ()
 cat $0 | grep "^\([[:alpha:]]\w* ()\s*\|\s*[[:alpha:]|_]*)\).*$" | sed "s_\(\s*[[:alpha:]|_]*\).*).*_\1_g"
 }
 
+_Debug "Executing... $*"
 # execute a function if $1 matches
 if [ -n "${1:-}" ] && echo "$function_list" | grep -wq "$1"; then $*; else help; fi
+_Debug "Post Executing... $*"
 
