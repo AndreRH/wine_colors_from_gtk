@@ -61,15 +61,24 @@ system ()
             echo "post display auto"
             #Notify "AWAKE";
             ;;
-        poweroff|off|shutdown) power preshutdown; rmmod e1000e; systemctl poweroff ;;
-        reboot|restart) power preshutdown; systemctl reboot ;;
+        poweroff|off|shutdown) beepnotes shutdown; power preshutdown; rmmod e1000e; systemctl poweroff ;;
+        reboot|restart) beepnotes shutdown; power preshutdown; systemctl reboot ;;
         hibernate) return ;; # TODO: encrypted swap hibernate support
-        boot) wireless restore; power auto; ;;
+        boot) beepnotes startup; wireless restore; power auto; ;;
         xboot) display auto; ;;
         consolelock) physlock -dsu $USER ;;
         lock) xscreensaver-command -lock ;;
         unlock) xscreensaver-command -deactivate ;;
     esac
+}
+
+beepnotes ()
+{
+case $1 in
+    startup) notes="233.08 261.63 207.65 103.83 155.56" ;;
+    shutdown) notes="196.00 220.00 174.61 87.31 130.81" ;;
+esac
+for note in $notes; do sudo beep -f $note -l 150 -D 100; done
 }
 
 power ()
