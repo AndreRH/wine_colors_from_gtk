@@ -1,0 +1,4 @@
+#!/bin/bash
+# equivalent to below echo -e ""
+echo -e "\a"
+

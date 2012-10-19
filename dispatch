@@ -75,7 +75,7 @@ system ()
 beepnotes ()
 {
 case $1 in
-    startup) notes="233.08 261.63 207.65 103.83 155.56" ;;
+    startup) sleep 1; notes="233.08 261.63 207.65 103.83 155.56" ;;
     shutdown) notes="196.00 220.00 174.61 87.31 130.81" ;;
 esac
 for note in $notes; do sudo beep -f $note -l 150 -D 100; done
