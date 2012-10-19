@@ -2,4 +2,7 @@
 #
 # $HOME/bin conform script
 
-sudo ln -fs $HOME/bin/dispatch /usr/bin/dispatch
+[ ! -e /usr/bin/dispatch ] && sudo ln -sf "$HOME/bin/dispatch" /usr/bin/dispatch
+[ ! -e /etc/systemd/system/boottime_power.service ] && sudo cp "$HOME/bin/dispatch_install/boottime_power.service" "/etc/systemd/system/."
+sudo systemctl enable boottime_power.service 
+

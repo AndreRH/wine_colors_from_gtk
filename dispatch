@@ -40,6 +40,7 @@ if [[ -z ${USER:-} ]]; then
     do _pid=$(pgrep -o $_windowmanager) && break; done
     for _envvar in USER XAUTHORITY DISPLAY DBUS_SESSION_BUS_ADDRESS;
     do eval export $(grep -z ^$_envvar /proc/$_pid/environ); done
+    PREFIX="su $USER -c"
 fi
 
 # ----------------------------------------------------------------------
@@ -51,9 +52,10 @@ system ()
     # it's possible that these should just be top level, e.g. "execute sleep"
     case $1 in
         sleep)
-            power max
+            # shouldn't be needed, testing only power max
             systemctl suspend
             # following post resume
+            system consolelock
             power auto 
             #display auto;
             echo "post display auto"
@@ -282,8 +284,8 @@ wifi ()
         on) rfkill unblock wifi && ip link set wlan0 up; Notify "wifi on" && echo -n on > $STATEROOT/wifi ;;
         off) rfkill block wifi && Notify "wifi off" && echo -n off > $STATEROOT/wifi ;;
         restore)
-            [[ -f "$STATEROOT/wifi" ]] && [[ -n "$(cat "$STATEROOT/wifi")" ]] && _state=$(cat "$STATEROOT/wifi")
-            wifi ${_state:-on}
+            [[ -f "$STATEROOT/wifi" && -n "$(cat "$STATEROOT/wifi")" ]] && _state=$(cat "$STATEROOT/wifi") || _state=on
+            wifi $_state
             ;;
     esac
 }
@@ -291,9 +293,9 @@ wifi ()
 bluetooth ()
 {
     case $* in
-        toggle) rfkill list bluetooth | egrep -iq "soft.*yes" && bluetooth on || bluetooth off ;;
-        on) rfkill unblock bluetooth && echo -n on > $STATEROOT/bluetooth ;;
-        off) rfkill block bluetooth && echo -n off > $STATEROOT/bluetooth ;;
+        toggle) sudo /usr/sbin/rfkill list bluetooth | egrep -iq "soft.*yes" && bluetooth on || bluetooth off ;;
+        on) sudo /usr/sbin/rfkill unblock bluetooth && echo -n on > $STATEROOT/bluetooth ;;
+        off) sudo /usr/sbin/rfkill block bluetooth && echo -n off > $STATEROOT/bluetooth ;;
         restore)
             [[ -f "$STATEROOT/bluetooth" ]] && [[ -n "$(cat "$STATEROOT/bluetooth")" ]] && _state=$(cat "$STATEROOT/bluetooth")
             bluetooth ${_state:-on}
@@ -308,7 +310,7 @@ wireless ()
         toggle) bluetooth toggle; wifi toggle ;;
         on) bluetooth on; wifi on ;;
         off) bluetooth off; wifi off ;;
-        restore) bluetooth restore; wifi restore ;;
+        restore) wifi restore; bluetooth restore; ;;
     esac
 }
 
@@ -518,8 +520,17 @@ _Display_State ()
 
 }
 
+tablet ()
+{
+    case $1 in
+        on) xdotool key XF86RotateWindows ;;
+        off) killall onboard ;;
+    esac
+}
+
 keyboard ()
 {
+    if [ "$1" == "off" ]; then killall onboard; return; fi
     if ! xdotool search --classname "onboard" &>/dev/null;then
         onboard &
         sleep 1
@@ -667,8 +678,6 @@ help ()
 cat $0 | grep "^\([[:alpha:]]\w* ()\s*\|\s*[[:alpha:]|_]*)\).*$" | sed "s_\(\s*[[:alpha:]|_]*\).*).*_\1_g"
 }
 
-_Debug "Executing... $*"
 # execute a function if $1 matches
 if [ -n "${1:-}" ] && echo "$function_list" | grep -wq "$1"; then $*; else help; fi
-_Debug "Post Executing... $*"
 

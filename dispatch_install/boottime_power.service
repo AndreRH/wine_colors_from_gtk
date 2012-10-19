@@ -1,0 +1,9 @@
+[Unit]
+Description=Set power and wireless blocking at boot time
+
+[Service]
+ExecStart=/usr/bin/dispatch system boot
+
+[Install]
+WantedBy=multi-user.target 
+
