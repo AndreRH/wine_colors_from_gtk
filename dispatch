@@ -33,14 +33,17 @@ ALSA=true # false if pulse
 # if running as root we need to get some user environment vars
 
 ROOTMODE=false
-PREFIX="eval"
+# assuming default mode is non-root user
+ASUSER="eval"
+ASROOT="sudo"
 if [[ -z ${USER:-} ]]; then
     ROOTMODE=true
     for _windowmanager in xmonad xfce bash zsh; # in console uses bash/zsh login
     do _pid=$(pgrep -o $_windowmanager) && break; done
     for _envvar in USER XAUTHORITY DISPLAY DBUS_SESSION_BUS_ADDRESS;
     do eval export $(grep -z ^$_envvar /proc/$_pid/environ); done
-    PREFIX="su $USER -c"
+    ASUSER="su $USER -c"
+    ASROOT=""
 fi
 
 # ----------------------------------------------------------------------
@@ -51,17 +54,15 @@ system ()
 { 
     # it's possible that these should just be top level, e.g. "execute sleep"
     case $1 in
-        sleep)
-            # shouldn't be needed, testing only power max
-            systemctl suspend
-            # following post resume
+        sleep|suspend)
             system consolelock
+            $ASROOT systemctl suspend
+            # following post resume
             power auto 
             #display auto;
-            echo "post display auto"
             #Notify "AWAKE";
             ;;
-        poweroff|off|shutdown) beepnotes shutdown; power preshutdown; rmmod e1000e; systemctl poweroff ;;
+        poweroff|off|shutdown) beepnotes shutdown; power preshutdown; $ASROOT rmmod e1000e; $ASROOT systemctl poweroff ;;
         reboot|restart) beepnotes shutdown; power preshutdown; systemctl reboot ;;
         hibernate) return ;; # TODO: encrypted swap hibernate support
         boot) beepnotes startup; wireless restore; power auto; ;;
@@ -75,10 +76,10 @@ system ()
 beepnotes ()
 {
 case $1 in
-    startup) sleep 1; notes="233.08 261.63 207.65 103.83 155.56" ;;
+    startup) sleep 0.25; notes="233.08 261.63 207.65 103.83 155.56" ;;
     shutdown) notes="196.00 220.00 174.61 87.31 130.81" ;;
 esac
-for note in $notes; do sudo beep -f $note -l 150 -D 100; done
+for note in $notes; do sudo beep -f $note -l 150 -D 100; done; sleep 1
 }
 
 power ()
@@ -532,21 +533,18 @@ _Display_State ()
 tablet ()
 {
     case $1 in
-        on) xdotool key XF86RotateWindows ;;
-        off) killall onboard ;;
+        #on) xdotool key XF86RotateWindows ;;
+        on) keyboard on ;;
+        off) keyboard off ;;
     esac
 }
 
 keyboard ()
 {
     if [ "$1" == "off" ]; then killall onboard; return; fi
-    if ! xdotool search --classname "onboard" &>/dev/null;then
-        onboard &
-        sleep 1
-        xdotool search --classname "onboard" windowsize %@ 48 48 windowmove %@ 1308 30
-    else
-        xdotool search --classname "onboard" windowraise %@
-    fi
+    $ASUSER "if ! xdotool search --classname "onboard" &>/dev/null;then \
+    eval 'onboard&'; else xdotool search --classname "onboard" windowraise %@; fi"
+    #eval 'onboard&'; sleep 2; xdotool search --classname "onboard" windowsize %@ 48 48 windowmove %@ 1308 30; \
 }
 
 _Display_Kill_Zombies ()
