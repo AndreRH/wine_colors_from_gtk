@@ -2,7 +2,9 @@
 #
 # $HOME/bin conform script
 
+[ -e "$HOME/.ssh/id_rsa" ] && git remote set-url origin git@github.com:user/repo.git
+
 [ ! -e /usr/bin/dispatch ] && sudo ln -sf "$HOME/bin/dispatch" /usr/bin/dispatch
 [ ! -e /etc/systemd/system/boottime_power.service ] && sudo cp "$HOME/bin/dispatch_install/boottime_power.service" "/etc/systemd/system/."
-sudo systemctl enable boottime_power.service 
+systemctl is-enabled boottime_power.service || sudo systemctl enable boottime_power.service 
 
