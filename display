@@ -131,6 +131,20 @@ case $1 in
 esac
 }
 
+_Simple_Cycle ()
+{
+    while read _line; do
+        if [[ "$_line" == [A-Z]* ]]; then # any line with initial Alpha
+            set -- $_line
+            _source="$1" # LVDS1, DP1, etc
+        else
+            # extract native resolution from mode line
+            echo "$_line" | grep -q "[[:digit:]]\*" && ACTIVE_DISPLAYS="$ACTIVE_DISPLAYS $_source"
+        fi
+    done < <(xrandr -q 2>/dev/null | egrep -iv "^screen")
+    echo "$ACTIVE_DISPLAYS" | grep -q "\b$INTERNAL_DISPLAY\b" && _Single_Display $EXTERNAL_DISPLAY || _Single_Display $INTERNAL_DISPLAY
+}
+
 _Help () { :; }
 
 case $1 in
@@ -138,6 +152,9 @@ case $1 in
     internal) _Single_Display $INTERNAL_DISPLAY ;; # internal only
     mirror) _Mirror_Display ${2:-} ;;
     span) _Span_Display ${2:-} ;;
-    tablet) _Tablet_Mode ${2:-} ;;
-    *) _Help ;;
+    tablet) _Tablet_Mode ${2:-}; exit; ;;
+    cycle) _Simple_Cycle ;;
+    *) _Help; exit ;;
 esac
+echo "$*" > /var/tmp/display
+
