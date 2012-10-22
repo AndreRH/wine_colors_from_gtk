@@ -1,0 +1,3 @@
+systool -m i915 -av
+cat /sys/module/i915/parameters/modeset
+lspci | grep -i vga

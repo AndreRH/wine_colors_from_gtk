@@ -55,7 +55,7 @@ system ()
     # it's possible that these should just be top level, e.g. "execute sleep"
     case $1 in
         sleep|suspend)
-            system consolelock
+            #system consolelock
             $ASROOT systemctl suspend
             # following post resume
             power auto 
@@ -79,7 +79,7 @@ case $1 in
     startup) sleep 0.25; notes="233.08 261.63 207.65 103.83 155.56" ;;
     shutdown) notes="196.00 220.00 174.61 87.31 130.81" ;;
 esac
-for note in $notes; do sudo beep -f $note -l 150 -D 100; done; sleep 1
+for note in $notes; do sudo beep -f $note -l 150 -D 100; done; sleep 1;
 }
 
 power ()
@@ -184,15 +184,13 @@ if [[ "${mode:0:3}" != "pre" ]]; then # preshutdown
     for _b in $(seq $current_brightness ${_sign:-}1 $new_brightness)
     do sudo echo -n $_b > $VIDEOPATH/brightness; sleep 0.015; done
 
-    # Don't reenable this section with out changing the way that the
-    # param/value pairs are passed... using set screws up recursive
-    # calls to power.
-    #$display_powersave && _rc6=1 _fbc=1 || _rc6=0 _fbc=-1
-    #_param_root="/sys/module/i915/parameters/"
-    #for _param_set in "i915_enable_rc6 $_rc6" "i915_enable_fbc $_fbc"; do
-    #    set $_param_set; _param=$1 _paramval=$2
-    #    [ "$(stat --format "%a" "${_param_root}${_param}")" -ge 600 ] && sudo echo -n $_paramval > "${_param_root}${_param}"
-    #done
+#    $display_powersave && _rc6=1 _fbc=1 || _rc6=0 _fbc=-1
+#    _param_root="/sys/module/i915/parameters/"
+#    for _param in i915_enable_rc6 i915_enable_fbc; do
+#        _param_value_varname="${_param:$((${#_param}-4)):4}"
+#        _param_value=${!_param_value_varname}
+#        [ "$(stat --format "%a" "${_param_root}${_param}")" -ge 600 ] && sudo echo -n $_param_value > "${_param_root}${_param}"
+#    done
 
     xset dpms 0 0 $dpms_seconds &>/dev/null
 fi
@@ -425,6 +423,8 @@ else
     :
 fi
 
+Notify () { :; }
+
 _Is_True () {
     shopt -s nocasematch;
     case ${1:-} in 1|y|yes|on|true) return 0 ;; *) return 1 ;; esac;
@@ -467,7 +467,7 @@ declare -ag CONNECTED_INACTIVE=()
 declare -ag DISCONNECTED=()
 declare -ag DISCONNECTED_ACTIVE=() # Zombies
 declare -ag DISCONNECTED_INACTIVE=()
-declare -Ag DISPLAY_STATEROOT
+declare -Ag DISPLAY_STATE
 declare -Ag DISPLAY_CURRENT
 declare -Ag DISPLAY_NATIVE
 declare -g APPLE_FIX=
@@ -475,11 +475,11 @@ declare -g APPLE_FIX=
 _Display_State ()
 {
     # per display values; example:
-    # DISPLAY_STATEROOT[LVDS1]=connected
+    # DISPLAY_STATE[LVDS1]=connected
     # DISPLAY_CURRENT[LVDS1]=1366x768
     # DISPLAY_NATIVE[LVDS1]=1366x768
 
-    [[ -n "${DISPLAY_STATEROOT[*]:-}" ]] && return # we've already set display state
+    [[ -n "${DISPLAY_STATE[*]:-}" ]] && return # we've already set display state
 
     # simple arrays of connected/disconnected displays
 
@@ -491,10 +491,10 @@ _Display_State ()
 
             set -- $_line
             _source="$1" # LVDS1, DP1, etc
-            declare -Ag DISPLAY_STATEROOT[$_source]="$2"
+            declare -Ag DISPLAY_STATE[$_source]="$2"
             declare -Ag DISPLAY_CURRENT[$_source]="$(echo "$3" | sed "s/\([[:digit:]]*x[[:digit:]]*\)\?.*/\1/")"
 
-            if [[ "${DISPLAY_STATEROOT[$_source]}" == "connected" ]]; then
+            if [[ "${DISPLAY_STATE[$_source]}" == "connected" ]]; then
 
                 declare -ag CONNECTED[${#CONNECTED[*]}]="$_source"
                 [[ "$_source" != "${DISPLAY_INTERNAL}" ]] && DISPLAY_EXTERNAL=$_source # easily expanded to multiple displays as array
@@ -533,8 +533,8 @@ _Display_State ()
 tablet ()
 {
     case $1 in
-        #on) xdotool key XF86RotateWindows ;;
-        on) keyboard on ;;
+        on) $ASUSER "xdotool key XF86RotateWindows" ;;
+        #on) keyboard on ;;
         off) keyboard off ;;
     esac
 }
@@ -624,10 +624,11 @@ _Display_Check_Cycle ()
 
 _Display_Apple_Fix ()
 {
+    echo "skipping apple fix"; return; # THIS IS APPARENTLY NOT NEEDED
     [[ -n $APPLE_FIX ]] && return
     _Display_State
     #if echo "$XRANDR_VERBOSE_STATEROOT" | grep -q "00ffffffffffff000610369200224202"; then
-    if [[ "${DISPLAY_STATEROOT[$DISPLAY_EXTERNAL]}" == "connected" && -z "${DISPLAY_NATIVE[$DISPLAY_EXTERNAL]:-}" ]]
+    if [[ "${DISPLAY_STATE[$DISPLAY_EXTERNAL]}" == "connected" && -z "${DISPLAY_NATIVE[$DISPLAY_EXTERNAL]:-}" ]]
     then
         for _rate in 45 # retaining loop to allow easy addition of frequencies
         do

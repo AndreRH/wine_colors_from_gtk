@@ -1,0 +1,143 @@
+#!/bin/bash
+
+# display management utility
+
+# ---------------------------------------------------------------------
+# get state of displays
+# ---------------------------------------------------------------------
+
+# Order of preferred internal/external when one winner has to be selected
+PREFERRED_INTERNAL_DISPLAY_PREFIXES="LVDS DP HDMI VGA"
+PREFERRED_EXTERNAL_DISPLAY_PREFIXES="DP HDMI VGA"
+
+ALL_DISPLAYS="$(echo $(xrandr -q | awk '/.*connected/ {print $1}' | sort))"
+CONNECTED_DISPLAYS="$(echo $(xrandr -q | awk '/ connected/ {print $1}' | sort))"
+DISCONNECTED_DISPLAYS="$(echo $(xrandr -q | awk '/disconnected/ {print $1}' | sort))"
+
+# INTERNAL DISPLAY
+for _prefix in $PREFERRED_INTERNAL_DISPLAY_PREFIXES; do
+    for _connected_display in $CONNECTED_DISPLAYS; do
+        if [[ $_connected_display == $_prefix* ]]; then
+	    INTERNAL_DISPLAY=$_connected_display; break
+        fi
+    done
+    [ -n "${INTERNAL_DISPLAY:-}" ] && break
+done; [ -z "${INTERNAL_DISPLAY:-}" ] && exit 1
+
+# EXTERNAL DISPLAY (possibly none, or primary external if more than one)
+for _prefix in $PREFERRED_EXTERNAL_DISPLAY_PREFIXES; do
+    for _connected_display in $CONNECTED_DISPLAYS; do
+        if [[ $_connected_display == $_prefix* ]]; then
+	    EXTERNAL_DISPLAY=$_connected_display; break
+        fi
+    done
+    [ -n "${EXTERNAL_DISPLAY:-}" ] && break
+done
+
+# ---------------------------------------------------------------------
+# process args
+# ---------------------------------------------------------------------
+
+_Xmonad_Restart () { xdotool key alt+q; }
+
+_Single_Display ()
+{
+# Turn on selected display and turn off all other displays. Example: _Single_Display DP1
+#
+echo $CONNECTED_DISPLAYS | grep -q "\b${1}\b" || return 1 # requested display not connected
+for _disp in $ALL_DISPLAYS; do
+    [[ $_disp != $1 ]] && _off="${_off:-}--output $_disp --off ";
+done
+if ! xrandr ${_off:-}--output $1 --scale 1x1 --primary --auto; then
+    xrandr ${_off:-}--output $1 --off
+    xrandr ${_off:-}--output $1 --scale 1x1 --primary --auto
+fi
+
+_Xmonad_Restart
+}
+
+_Mirror_Display ()
+{
+[[ -z "$EXTERNAL_DISPLAY" ]] && return 1; # requires at least one external display
+[[ "${1:-}" == "internal" ]] && SWAP=$INTERNAL_DISPLAY INTERNAL_DISPLAY=$EXTERNAL_DISPLAY EXTERNAL_DISPLAY=$SWAP
+    while read _line; do
+        if [[ "$_line" == [A-Z]* ]]; then # any line with initial Alpha
+            set -- $_line
+            _source="$1" # LVDS1, DP1, etc
+        else
+            # extract native resolution from mode line
+            if [[ -z "${NATIVE_RESOLUTION[$_source]:-}" ]]; then
+                set -- $_line
+                declare -Ag NATIVE_RESOLUTION[$_source]="$(echo "$1" | sed "s/\([[:digit:]]*x[[:digit:]]*\)\?.*/\1/")"
+            fi
+        fi
+    done < <(xrandr -q 2>/dev/null | egrep -iv "^screen")
+    _internal_resolution="${NATIVE_RESOLUTION[$INTERNAL_DISPLAY]}"
+    _external_resolution="${NATIVE_RESOLUTION[$EXTERNAL_DISPLAY]}"
+    set -- $(echo $_internal_resolution | tr "x" " "); _internal_resolution_x="$1"; _internal_resolution_y="$2"
+    set -- $(echo $_external_resolution | tr "x" " "); _external_resolution_x="$1"; _external_resolution_y="$2"
+    _x_scaling="$(echo "scale=4; $_external_resolution_x/$_internal_resolution_x" | bc)"
+    _y_scaling="$(echo "scale=4; $_external_resolution_y/$_internal_resolution_y" | bc)"
+    _internal_cmd="--scale ${_x_scaling}x${_y_scaling} --auto"
+    _external_cmd="--same-as ${INTERNAL_DISPLAY} --scale 1x1 --primary --auto"
+    for _disp in $ALL_DISPLAYS; do
+        if [[ "$INTERNAL_DISPLAY" != "$_disp" && "$EXTERNAL_DISPLAY" != "$_disp" ]]; then _off="${_off:-}--output $_disp --off "; fi
+    done
+    # deal with occasional failure to switch (e.g. from mirror external to mirror internal or vice versa)
+    if ! xrandr ${_off:-}--output $INTERNAL_DISPLAY $_internal_cmd --output $EXTERNAL_DISPLAY $_external_cmd; then
+        xrandr --output $INTERNAL_DISPLAY --off --output $EXTERNAL_DISPLAY --off
+        xrandr ${_off:-}--output $INTERNAL_DISPLAY $_internal_cmd --output $EXTERNAL_DISPLAY $_external_cmd || xrandr --output $INTERNAL_DISPLAY --auto --output $EXTERNAL_DISPLAY --off
+    fi
+    _Xmonad_Restart
+}
+
+_Span_Display ()
+{
+[[ "${1:-}" == "internal" ]] && _intprimary="--primary" _extprimary="" || _intprimary="" _extprimary="--primary"
+[[ -z "$EXTERNAL_DISPLAY" ]] && return 1; # requires at least one external display
+for _disp in $ALL_DISPLAYS; do
+        # if it's connected and neither internal nor primary external, append to on cmd (on, not primary, above internal)
+        # if it's not connected, append to off cmd
+        if [[ "$INTERNAL_DISPLAY" != "$_disp" && "$EXTERNAL_DISPLAY" != "$_disp" ]]; then
+            echo "$DISCONNECTED_DISPLAYS" | grep -q "\b$_disp\b" && [[ $_disp != $1 ]] && _off="${_off:-}--output $_disp --off ";
+
+            #DEBUG: switch to turning these off as welldue to problem with turning on extra displays -- e.g. "xrandr: cannot find crtc for output VGA1"
+            #echo "$CONNECTED_DISPLAYS" | grep -q "\b$_disp\b" && [[ $_disp != $1 ]] && _on="${_on:-}--output $_disp --scale 1x1 --auto --above $INTERNAL_DISPLAY ";
+            echo "$CONNECTED_DISPLAYS" | grep -q "\b$_disp\b" && [[ $_disp != $1 ]] && _off="${_off:-}--output $_disp --off ";
+        fi
+done
+eval "xrandr ${_off:-}${_on:-}--output $INTERNAL_DISPLAY --scale 1x1 ${_intprimary} --auto --output $EXTERNAL_DISPLAY --scale 1x1 ${_extprimary} --auto --above $INTERNAL_DISPLAY"
+_Xmonad_Restart
+}
+
+_Tablet_Mode ()
+{
+case $1 in
+    on)
+        xrandr --output $INTERNAL_DISPLAY --rotate inverted
+        for _device in $(xsetwacom --list devices | sed "s/.*id: \(..\).*$/\1/"); do xsetwacom --set $_device Rotate half; done
+    ;;
+    off)
+        xrandr --output $INTERNAL_DISPLAY --rotate normal
+        for _device in $(xsetwacom --list devices | sed "s/.*id: \(..\).*$/\1/"); do xsetwacom --set $_device Rotate none; done
+    ;;
+    toggle)
+        [[ "$(xrandr -q | awk '$1 ~ /LVDS1/ {print $4}')" == "inverted" ]] && _Tablet_Mode off || _Tablet_Mode on
+    ;;
+    auto)
+        _Tablet_Mode on
+        _Mirror_Display
+    ;;
+esac
+}
+
+_Help () { :; }
+
+case $1 in
+    external) _Single_Display $EXTERNAL_DISPLAY ;; # external only
+    internal) _Single_Display $INTERNAL_DISPLAY ;; # internal only
+    mirror) _Mirror_Display ${2:-} ;;
+    span) _Span_Display ${2:-} ;;
+    tablet) _Tablet_Mode ${2:-} ;;
+    *) _Help ;;
+esac
