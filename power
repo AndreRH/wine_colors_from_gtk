@@ -84,7 +84,7 @@ case $1 in
 
     hibernate) exit; ;; # TODO: encrypted swap hibernate support
 
-    boot) bloop startup; wireless all restore; power auto; exit; ;;
+    boot) bloop startup; sudo wireless all restore; power auto; exit; ;;
 
     auto) [[ $(cat /sys/class/power_supply/AC/online) > 0 ]] && power max || power min; exit; ;;
 
@@ -272,7 +272,8 @@ Debug CPU
 # 2 - Also bias task wakeups to semi-idle cpu package for power savings
 
 $cpu_powersave && _governor=powersave _sched=2 _perfbias=15 \
-|| _governor=performance _sched=0 _perfbias=0
+|| _governor=ondemand _sched=0 _perfbias=0
+#|| _governor=performance _sched=0 _perfbias=0
 
 # cpu governor
 sudo cpupower -c all frequency-set -g $_governor &>/dev/null || true
