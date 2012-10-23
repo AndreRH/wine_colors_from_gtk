@@ -1,0 +1,36 @@
+wifi ()
+{
+    case $* in
+        toggle) rfkill list wifi | egrep -iq "soft.*yes" && wifi off || wifi on ;;
+        on) rfkill unblock wifi && ip link set wlan0 up; Notify "wifi on" && echo -n on > $STATEROOT/wifi ;;
+        off) rfkill block wifi && Notify "wifi off" && echo -n off > $STATEROOT/wifi ;;
+        restore)
+            [[ -f "$STATEROOT/wifi" && -n "$(cat "$STATEROOT/wifi")" ]] && _state=$(cat "$STATEROOT/wifi") || _state=on
+            wifi $_state
+            ;;
+    esac
+}
+
+bluetooth ()
+{
+    case $* in
+        toggle) sudo /usr/sbin/rfkill list bluetooth | egrep -iq "soft.*yes" && bluetooth on || bluetooth off ;;
+        on) sudo /usr/sbin/rfkill unblock bluetooth && echo -n on > $STATEROOT/bluetooth ;;
+        off) sudo /usr/sbin/rfkill block bluetooth && echo -n off > $STATEROOT/bluetooth ;;
+        restore)
+            [[ -f "$STATEROOT/bluetooth" ]] && [[ -n "$(cat "$STATEROOT/bluetooth")" ]] && _state=$(cat "$STATEROOT/bluetooth")
+            bluetooth ${_state:-on}
+            ;;
+    esac
+}
+
+# both wifi and bluetooth
+wireless ()
+{
+    case $* in
+        toggle) bluetooth toggle; wifi toggle ;;
+        on) bluetooth on; wifi on ;;
+        off) bluetooth off; wifi off ;;
+        restore) wifi restore; bluetooth restore; ;;
+    esac
+}

@@ -1,0 +1,23 @@
+#!/bin/bash
+
+# audio mode (pulse/alsa)
+command -v pamixer && ALSA=false || ALSA=true
+
+_adj=1 # used if no value supplied, e.g. volume up OR volume up 10
+
+case $1 in
+    up) $ALSA && amixer set Master ${2:-$_adj}%+ unmute -q || /usr/bin/pamixer --increase $_adj --unmute ;;
+    mid) $ALSA && amixer set Master 75% unmute -q || true ;;
+    max) $ALSA && amixer set Master 100% unmute -q || true ;;
+    down) $ALSA && amixer set Master ${2:-$_adj}%- unmute -q || /usr/bin/pamixer --decrease $_adj --unmute ;;
+    mute) $ALSA && amixer set Master mute -q || /usr/bin/pamixer --mute ;;
+    unmute) $ALSA && amixer set Master unmute -q || /usr/bin/pamixer --unmute ;;
+    toggle) if $ALSA; then amixer set Master toggle -q :; else $(/usr/bin/pamixer --get-mute) && volume unmute || volume mute; fi  ;;
+    mic) 
+        case $2 in
+	    mute) $ALSA && amixer set Capture mute -q || pamixer set Capture mute -q ;;
+        unmute) $ALSA && amixer set Capture unmute -q ;;
+        toggle) $ALSA && amixer set Capture toggle -q ;;
+        esac
+        ;;
+esac

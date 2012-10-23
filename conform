@@ -2,9 +2,31 @@
 #
 # $HOME/bin conform script
 
-[ -e "$HOME/.ssh/id_rsa" ] && git remote set-url origin git@github.com:user/repo.git
+cd $HOME/bin
+[ -e "$HOME/.ssh/id_rsa" ] && git remote set-url origin git@github.com:altercation/es-bin.git
 
-[ ! -e /usr/bin/dispatch ] && sudo ln -sf "$HOME/bin/dispatch" /usr/bin/dispatch
-[ ! -e /etc/systemd/system/boottime_power.service ] && sudo cp "$HOME/bin/dispatch_install/boottime_power.service" "/etc/systemd/system/."
-systemctl is-enabled boottime_power.service || sudo systemctl enable boottime_power.service 
+for _util in dispatch display power; do
+    [ ! -e /usr/bin/$_util ] && sudo ln -sf "$HOME/bin/$_util" /usr/bin/$_util
+done
+
+if [ ! -e /etc/systemd/system/boottime_power.service ]; then
+
+    cat > /tmp/boottime_power.service <<-EOF
+	[Unit]
+	Description=Set power and wireless blocking at boot time
+
+	[Service]
+	ExecStart=/usr/bin/power boot
+
+	[Install]
+	WantedBy=multi-user.target 
+	EOF
+
+    sudo cp /tmp/boottime_power.service /etc/systemd/system/boottime_power.service
+    sudo rm /tmp/boottime_power.service
+
+    systemctl is-enabled boottime_power.service \
+    || sudo systemctl enable boottime_power.service 
+
+fi
 

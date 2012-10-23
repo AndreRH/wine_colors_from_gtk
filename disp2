@@ -4,21 +4,6 @@
 # es@ethanschoonover.com
 
 
-# ----------------------------------------------------------------------
-# Find User & Environment Variables
-# ----------------------------------------------------------------------
-
-if [[ -z ${USER:-} ]];
-then
-    ROOTMODE=true
-    for _windowmanager in xmonad xfce bash; # in console uses bash login
-    do _pid=$(pgrep -o $_windowmanager) && break; done
-    for _envvar in USER XAUTHORITY DISPLAY DBUS_SESSION_BUS_ADDRESS;
-    do eval export $(grep -z ^$_envvar /proc/$_pid/environ); done
-else
-    ROOTMODE=
-fi
-
 # ---------------------------------------------------------------------
 # Help
 # ---------------------------------------------------------------------
@@ -64,6 +49,12 @@ for _prefix in $PREFERRED_EXTERNAL_DISPLAY_PREFIXES; do
     [ -n "${EXTERNAL_DISPLAY:-}" ] && break
 done
 
+echo "$INTERNAL_DISPLAY >>>>"
+echo $CONNECTED_DISPLAYS | grep "\b$INTERNAL_DISPLAY\b"
+echo "$EXTERNAL_DISPLAY >>>>"
+echo $CONNECTED_DISPLAYS | grep "\b$EXTERNAL_DISPLAY\b"
+exit
+
 # ---------------------------------------------------------------------
 # process args
 # ---------------------------------------------------------------------
@@ -74,7 +65,6 @@ _Single_Display ()
 {
 # Turn on selected display and turn off all other displays. Example: _Single_Display DP1
 #
-[ -z "$1" ] && return 1 # possible this is being called with a null variable
 echo $CONNECTED_DISPLAYS | grep -q "\b${1}\b" || return 1 # requested display not connected
 for _disp in $ALL_DISPLAYS; do
     [[ $_disp != $1 && -n "$_disp" ]] && _off="${_off:-}--output $_disp --off ";
@@ -212,30 +202,17 @@ _Simple_Cycle ()
     echo "$ACTIVE_DISPLAYS" | grep -q "\b$INTERNAL_DISPLAY\b" && _Single_Display $EXTERNAL_DISPLAY || _Single_Display $INTERNAL_DISPLAY
 }
 
-_Record_State ()
-{
-    xrandr -q > /var/tmp/display_xrandr_dump;
-}
-
-_Diff_State ()
-{
-    [ ! -e /var/tmp/display_xrandr_dump ] && return 1
-    diff /var/tmp/display_xrandr_dump <(xrandr -q) &>/dev/null && return 0 || return 1
-}
-
 case $1 in
-    auto) _Diff_State && echo "no display state change required" \
-          || _Single_Display $EXTERNAL_DISPLAY \
-          || _Single_Display $INTERNAL_DISPLAY; ;;
-    record) _Record_State; ;;
-    external) _Single_Display $EXTERNAL_DISPLAY ;;
-    internal) _Single_Display $INTERNAL_DISPLAY ;;
+    #TODO: make auto not change if same state as last check, e.g. pre/post sleep
+    auto) _Single_Display $EXTERNAL_DISPLAY || _Single_Display $INTERNAL_DISPLAY ;; # external only
+    external) _Single_Display $EXTERNAL_DISPLAY ;; # external only
+    internal) _Single_Display $INTERNAL_DISPLAY ;; # internal only
     mirror) _Mirror_Display ${2:-} ;;
     span) _Span_Display ${2:-} ;;
-    tablet) _Tablet_Mode ${2:-}; ;;
+    tablet) _Tablet_Mode ${2:-}; exit; ;;
     cycle) _Simple_Cycle ;;
-    consolelock) physlock -dsu $USER; ;;
-    lock) xscreensaver-command -lock; ;;
-    unlock) xscreensaver-command -lock; sleep 0.5; xscreensaver-command -deactivate; ;;
-    *) _Help; ;;
+    consolelock) physlock -dsu $USER; exit; ;;
+    lock) xscreensaver-command -lock; exit; ;;
+    unlock) xscreensaver-command -lock; sleep 0; xscreensaver-command -deactivate; exit; ;;
+    *) _Help; exit ;;
 esac
