@@ -10,13 +10,15 @@
 #if [ "$(whoami)" != "root" ]; then echo "Must be root/sudo."; exit; fi
 if [ "$(whoami)" != "root" ]; then sudo power $*; exit; fi
 
+[ -z "${1:-}" ] && echo "missing arguments" && exit 1
+
 # ----------------------------------------------------------------------
 # Globals
 # ----------------------------------------------------------------------
 
 # buckle up
-set -o errexit
-set -o nounset
+#set -o errexit
+#set -o nounset
 
 # to retain state over reboots
 STATEROOT=/var/tmp
@@ -65,7 +67,16 @@ fi
 
 case $1 in
 
-    sleep|suspend) display lock; systemctl suspend; display auto; display unlock; power auto; exit; ;;
+    sleep|suspend)
+    $ASUSER "/usr/bin/display lock &>/dev/null";
+    bloop sleep;
+    systemctl suspend;
+    $ASUSER "/usr/bin/display auto norestart";
+    $ASUSER "/usr/bin/display unlock &";
+    $ASUSER "/usr/bin/power auto &";
+    bloop resume;
+    exit;
+    ;;
 
     poweroff|off|shutdown) bloop shutdown; power preshutdown; rmmod e1000e; systemctl poweroff || exit 1; ;;
 

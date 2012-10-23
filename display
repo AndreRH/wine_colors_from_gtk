@@ -3,7 +3,6 @@
 # display management utility
 # es@ethanschoonover.com
 
-
 # ----------------------------------------------------------------------
 # Find User & Environment Variables
 # ----------------------------------------------------------------------
@@ -15,8 +14,10 @@ then
     do _pid=$(pgrep -o $_windowmanager) && break; done
     for _envvar in USER XAUTHORITY DISPLAY DBUS_SESSION_BUS_ADDRESS;
     do eval export $(grep -z ^$_envvar /proc/$_pid/environ); done
+    ASUSER="su $USER -c"
 else
     ROOTMODE=
+    ASUSER="eval"
 fi
 
 # ---------------------------------------------------------------------
@@ -68,23 +69,25 @@ done
 # process args
 # ---------------------------------------------------------------------
 
-_Xmonad_Restart () { xdotool key alt+q; }
+_Xmonad_Restart () {
+$ASUSER "xdotool key alt+q";
+}
 
 _Single_Display ()
 {
 # Turn on selected display and turn off all other displays. Example: _Single_Display DP1
 #
-[ -z "$1" ] && return 1 # possible this is being called with a null variable
-echo $CONNECTED_DISPLAYS | grep -q "\b${1}\b" || return 1 # requested display not connected
+[ -z "${1:-}" ] && return 1 # possible this is being called with a null variable
+echo $CONNECTED_DISPLAYS | grep -q "\b${1}\b" &>/dev/null || return 1 # requested display not connected
 for _disp in $ALL_DISPLAYS; do
     [[ $_disp != $1 && -n "$_disp" ]] && _off="${_off:-}--output $_disp --off ";
 done
-if ! xrandr ${_off:-}--output $1 --scale 1x1 --primary --auto; then
-    xrandr ${_off:-}--output $1 --off
-    xrandr ${_off:-}--output $1 --scale 1x1 --primary --auto
+if ! xrandr ${_off:-}--output $1 --scale 1x1 --primary --auto &>/dev/null; then
+    xrandr ${_off:-}--output $1 --off &>/dev/null
+    xrandr ${_off:-}--output $1 --scale 1x1 --primary --auto &>/dev/null
 fi
 
-_Xmonad_Restart
+[ -z "${2:-}" ] && _Xmonad_Restart || $ASUSER "/home/es/bin/slowrestart&" # if screensaver is running, we don't want to use xdotool
 }
 
 _Mirror_Display ()
@@ -224,9 +227,9 @@ _Diff_State ()
 }
 
 case $1 in
-    auto) _Diff_State && echo "no display state change required" \
-          || _Single_Display $EXTERNAL_DISPLAY \
-          || _Single_Display $INTERNAL_DISPLAY; ;;
+    auto) _Diff_State \
+          || _Single_Display $EXTERNAL_DISPLAY ${2:-}\
+          || _Single_Display $INTERNAL_DISPLAY ${2:-}; exit 0; ;;
     record) _Record_State; ;;
     external) _Single_Display $EXTERNAL_DISPLAY ;;
     internal) _Single_Display $INTERNAL_DISPLAY ;;
@@ -235,7 +238,7 @@ case $1 in
     tablet) _Tablet_Mode ${2:-}; ;;
     cycle) _Simple_Cycle ;;
     consolelock) physlock -dsu $USER; ;;
-    lock) xscreensaver-command -lock; ;;
-    unlock) xscreensaver-command -lock; sleep 0.5; xscreensaver-command -deactivate; ;;
-    *) _Help; ;;
+    lock) $ASUSER "xscreensaver-command -lock"; ;;
+    unlock) $ASUSER "xscreensaver-command -deactivate &>/dev/null"; ;;
+    reset) _Xmonad_Restart; ;;
 esac

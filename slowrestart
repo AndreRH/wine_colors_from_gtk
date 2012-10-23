@@ -1,0 +1,14 @@
+#!/bin/bash
+_run=false
+xscreensaver-command -watch |
+while read STATUS; do
+   case "$STATUS" in
+     UNBLANK*)
+       $_run && /usr/bin/display reset
+       $_run && exit
+     ;;
+     RUN*)
+       _run=true
+     ;;
+   esac
+done
