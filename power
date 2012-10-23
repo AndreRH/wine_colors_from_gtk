@@ -84,7 +84,7 @@ case $1 in
 
     hibernate) exit; ;; # TODO: encrypted swap hibernate support
 
-    boot) bloop startup; wireless restore; power auto; exit; ;;
+    boot) bloop startup; wireless all restore; power auto; exit; ;;
 
     auto) [[ $(cat /sys/class/power_supply/AC/online) > 0 ]] && power max || power min; exit; ;;
 

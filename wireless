@@ -1,9 +1,25 @@
+#!/bin/bash
+
+STATEROOT=/var/tmp
+
+touch $STATEROOT/wifi
+touch $STATEROOT/bluetooth
+if [ "$(whoami)" == "root" ]; then
+chmod a+rw $STATEROOT/wifi
+chmod a+rw $STATEROOT/bluetooth
+fi
+
+Notify ()
+{
+:
+}
+
 wifi ()
 {
     case $* in
-        toggle) rfkill list wifi | egrep -iq "soft.*yes" && wifi off || wifi on ;;
-        on) rfkill unblock wifi && ip link set wlan0 up; Notify "wifi on" && echo -n on > $STATEROOT/wifi ;;
-        off) rfkill block wifi && Notify "wifi off" && echo -n off > $STATEROOT/wifi ;;
+        toggle) sudo rfkill list wifi | egrep -iq "soft.*yes" && wifi off || wifi on ;;
+        on) sudo rfkill unblock wifi && ip link set wlan0 up; Notify "wifi on" && echo -n on > $STATEROOT/wifi ;;
+        off) sudo rfkill block wifi && Notify "wifi off" && echo -n off > $STATEROOT/wifi ;;
         restore)
             [[ -f "$STATEROOT/wifi" && -n "$(cat "$STATEROOT/wifi")" ]] && _state=$(cat "$STATEROOT/wifi") || _state=on
             wifi $_state
@@ -25,7 +41,7 @@ bluetooth ()
 }
 
 # both wifi and bluetooth
-wireless ()
+all ()
 {
     case $* in
         toggle) bluetooth toggle; wifi toggle ;;
@@ -34,3 +50,5 @@ wireless ()
         restore) wifi restore; bluetooth restore; ;;
     esac
 }
+
+$*

@@ -20,6 +20,14 @@ else
     ASUSER="eval"
 fi
 
+STATEROOT=/var/tmp
+touch $STATEROOT/display
+touch $STATEROOT/display_xrandr_dump
+if [ "$(whoami)" == "root" ]; then
+chmod a+rw $STATEROOT/display
+chmod a+rw $STATEROOT/display_xrandr_dump
+fi
+
 # ---------------------------------------------------------------------
 # Help
 # ---------------------------------------------------------------------
@@ -87,7 +95,7 @@ if ! xrandr ${_off:-}--output $1 --scale 1x1 --primary --auto &>/dev/null; then
     xrandr ${_off:-}--output $1 --scale 1x1 --primary --auto &>/dev/null
 fi
 
-[ -z "${2:-}" ] && _Xmonad_Restart || $ASUSER "/home/es/bin/slowrestart&" # if screensaver is running, we don't want to use xdotool
+[ -z "${2:-}" ] && _Xmonad_Restart || $ASUSER "/usr/bin/slowrestart&" # if screensaver is running, we don't want to use xdotool
 }
 
 _Mirror_Display ()
@@ -217,13 +225,13 @@ _Simple_Cycle ()
 
 _Record_State ()
 {
-    xrandr -q > /var/tmp/display_xrandr_dump;
+    xrandr -q > $STATEROOT/display_xrandr_dump;
 }
 
 _Diff_State ()
 {
-    [ ! -e /var/tmp/display_xrandr_dump ] && return 1
-    diff /var/tmp/display_xrandr_dump <(xrandr -q) &>/dev/null && return 0 || return 1
+    [ ! -e $STATEROOT/display_xrandr_dump ] && return 1
+    diff $STATEROOT/display_xrandr_dump <(xrandr -q) &>/dev/null && return 0 || return 1
 }
 
 case $1 in
