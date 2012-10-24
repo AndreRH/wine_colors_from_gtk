@@ -1,0 +1,5 @@
+#!/bin/bash
+#
+# notify
+
+notify-send -u critical "$*"

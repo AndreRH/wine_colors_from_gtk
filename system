@@ -1,0 +1,56 @@
+#!/bin/bash
+#
+# system functions (sleep, boot, etc.)
+
+# ----------------------------------------------------------------------
+# Source functions library
+# ----------------------------------------------------------------------
+# handles both symlinked and original script
+# expects function file in same directory as script (or script target)
+
+. "$(dirname $(readlink -f $0))/functions"
+
+# ----------------------------------------------------------------------
+# System Functions
+# ----------------------------------------------------------------------
+
+case $1 in
+
+    boot)
+        bloop startup
+        sudo wireless all restore
+        power auto; exit
+        ;;
+
+    sleep|suspend)
+        #As_User "display lock"
+        display lock
+        bloop sleep
+        systemctl suspend
+        #As_User "display auto norestart"
+        #all display/power as user, switching to handle this purely in script
+        display auto norestart
+        display unlock
+        power auto
+        bloop resume
+        ;;
+
+    poweroff|off|shutdown)
+        bloop shutdown
+        power preshutdown
+        rmmod e1000e
+        systemctl poweroff || exit 1
+        ;;
+
+    reboot|restart)
+        bloop shutdown
+        power preshutdown
+        systemctl reboot || exit 1
+        ;;
+
+    hibernate)
+        # TODO: encrypted swap hibernate support
+        exit 1
+        ;;
+
+esac

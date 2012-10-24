@@ -3,12 +3,18 @@
 # display management utility
 # es@ethanschoonover.com
 
+set -o errexit
+set -o nounset
+COMPLETE=false
+ORIGARGS="$*"
+
+
 # ----------------------------------------------------------------------
 # Find User & Environment Variables
 # ----------------------------------------------------------------------
 
-if [[ -z ${USER:-} ]];
-then
+#if [[ -z "${USER:-}" || "${USER:-}" == "root" ]]; then
+if false; then
     ROOTMODE=true
     for _windowmanager in xmonad xfce bash; # in console uses bash login
     do _pid=$(pgrep -o $_windowmanager) && break; done
@@ -19,6 +25,9 @@ else
     ROOTMODE=
     ASUSER="eval"
 fi
+
+trap _trapcheck EXIT INT TERM
+_trapcheck () { $COMPLETE && $ASUSER "notify-send -u low \"display $ORIGARGS complete\"" || $ASUSER "notify-send -u critical \"display $ORIGARGS failed\""; }
 
 STATEROOT=/var/tmp
 touch $STATEROOT/display
@@ -36,7 +45,7 @@ _Help ()
 {
 echo "display internal | external | mirror [internal|external] | \
 span [internal|external] | cycle";
-exit
+COMPLETE=true; exit
 }
 [ -z "$*" ] && _Help
 
@@ -79,6 +88,7 @@ done
 
 _Xmonad_Restart () {
 $ASUSER "xdotool key alt+q";
+sleep 3
 }
 
 _Single_Display ()
@@ -245,7 +255,7 @@ _Diff_State ()
 case $1 in
     auto) _Diff_State \
           || _Single_Display $EXTERNAL_DISPLAY ${2:-}\
-          || _Single_Display $INTERNAL_DISPLAY ${2:-}; exit 0; ;;
+          || _Single_Display $INTERNAL_DISPLAY ${2:-}; ;;
     record) _Record_State; ;;
     external) _Single_Display $EXTERNAL_DISPLAY ;;
     internal) _Single_Display $INTERNAL_DISPLAY ;;
@@ -258,3 +268,5 @@ case $1 in
     unlock) $ASUSER "xscreensaver-command -deactivate &>/dev/null"; ;;
     reset) _Xmonad_Restart; ;;
 esac
+
+COMPLETE=true

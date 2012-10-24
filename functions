@@ -1,0 +1,113 @@
+#!/bin/bash
+
+# library of common functions for utility scripts
+# es@ethanschoonover.com
+
+# ----------------------------------------------------------------------
+# Script Settings & Globals
+# ----------------------------------------------------------------------
+
+set -o errexit
+set -o nounset
+trap Trap EXIT INT TERM
+
+STATEFILE="/var/tmp/$(basename "$0")"
+SCRIPT_COMPLETE=false
+INITIAL_ARGS="$*"
+
+# ----------------------------------------------------------------------
+# Functions
+# ----------------------------------------------------------------------
+# Don't change state, return values
+# Avoid using globals opaquely (echo results)
+#
+# This_Is_A_Global_Function
+# _This_Is_A_Local_Function
+# THIS_IS_A_GLOBAL_VARIABLE
+# _THIS_IS_A_FUNCTION_LOCAL_STATE_VARIABLE (a global used only in 1 func)
+# _this_is_a_local_temp_variable
+
+Is_Root ()
+{
+    [[ "$(whoami)" == "root" || "$USER" == "root" || -z "$USER" ]]
+}
+
+Trap ()
+{
+    if $SCRIPT_COMPLETE; then
+        ${QUIET_EXIT:-false} || As_User "notify-send -u low \"power $INITIAL_ARGS\""
+    else # failed to complete script
+        As_User "notify-send -u critical \"FAILED: power $INITIAL_ARGS\""
+    fi
+}
+
+Quiet_Exit ()
+{
+    QUIET_EXIT=true
+}
+
+Completed ()
+{
+    SCRIPT_COMPLETE=true
+}
+
+Remove_State ()
+{
+    [ -e "$STATEFILE" ] && rm "$STATEFILE"
+}
+
+Set_State ()
+{
+# takes one argument, the value of the state to be recorded
+# will correctly error exit if missing value of STATE
+# _Record_State min
+    echo -n "$INITIAL_ARGS" > "$STATEFILE"
+    chmod a+rw "$STATEFILE"
+    Is_Root && As_User && chown $USER:users "$STATEFILE"
+}
+
+Get_State ()
+{
+# first check if we have set state variable (used only internally in
+# this function) and if not, read state from file. finally return state.
+    [[ -z "${STATE:-}" && -e "$STATEFILE" ]] && STATE="$(cat $STATEFILE)"
+    echo "${STATE:-}" # this may legitimately be null
+}
+
+Debug ()
+{
+# quick debug function, better info than "caller"
+# called without parameters at top of function; reports where it was called 
+# from (calling function and line number)
+# DEBUG must be set to true in main script for this to trigger
+    $DEBUG || return 0;
+    [[ ${1:-} ]] \
+    && local with_args=" with arguments \"$@\"" \
+    || local with_args=""
+    echo -n "FUNCTION: ${FUNCNAME[1]:-}() line ${BASH_LINENO[0]} "
+    echo "called by ${FUNCNAME[2]:-}${with_args} at line ${BASH_LINENO[1]}"
+}
+
+As_User ()
+{
+    if [ -z "${_AS_USER:-}" ] && Is_Root; then
+        for _windowmanager in xmonad xfce bash zsh; # in console uses bash/zsh login
+        do _pid=$(pgrep -o $_windowmanager) && break; done
+        for _envvar in USER XAUTHORITY DISPLAY DBUS_SESSION_BUS_ADDRESS;
+        do eval export $(grep -z ^$_envvar /proc/$_pid/environ); done
+        _AS_USER="su $USER -c"
+    fi
+    ${_AS_USER:-eval} "$*"
+}
+
+#    toggle) _mode=(min max); _state=$(cat $STATEROOT/power); [[ $_state == "${_mode[0]}" ]] && power ${_mode[1]} && return; power ${_mode[0]}; exit; ;;
+
+#    cycle)
+#        _mode=(min max mov); _state=$(cat $STATEROOT/power); _post="power auto"
+#        for _s in $(seq 0 $((${#_mode[@]} - 1))); do 
+#            if [[ ${_state:-} == ${_mode[$_s]} ]]; then
+#                _post=; power ${_mode[$(( ++_s % ${#_mode[@]} ))]} && break;
+#            fi
+#        done
+#	eval "$_post"; return
+#        ;;

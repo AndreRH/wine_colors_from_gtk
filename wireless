@@ -24,6 +24,7 @@ wifi ()
             [[ -f "$STATEROOT/wifi" && -n "$(cat "$STATEROOT/wifi")" ]] && _state=$(cat "$STATEROOT/wifi") || _state=on
             wifi $_state
             ;;
+        recon) sudo systemctl restart net-auto-wireless.service ;;
     esac
 }
 
@@ -50,5 +51,6 @@ all ()
         restore) wifi restore; bluetooth restore; ;;
     esac
 }
+
 
 $*
