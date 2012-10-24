@@ -32,12 +32,23 @@ Is_Root ()
     [[ "$(whoami)" == "root" || "$USER" == "root" || -z "$USER" ]]
 }
 
+Warn ()
+{
+    echo "$*" && return 0
+}
+
+Fail ()
+{
+    FAILURE="$*"
+    echo "$*" && exit 1
+}
+
 Trap ()
 {
     if $SCRIPT_COMPLETE; then
-        ${QUIET_EXIT:-false} || As_User "notify-send -u low \"power $INITIAL_ARGS\""
+        ${QUIET_EXIT:-false} || As_User "notify-send -u low \"$(basename $0) $INITIAL_ARGS\""
     else # failed to complete script
-        As_User "notify-send -u critical \"FAILED: power $INITIAL_ARGS\""
+        As_User "notify-send -u critical \"FAILED: $(basename $0) $INITIAL_ARGS${FAILURE:+ - }${FAILURE:-}\""
     fi
 }
 

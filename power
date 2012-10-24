@@ -10,15 +10,12 @@
 # expects function file in same directory as script (or script target)
 
 DEBUG=true
-
 . "$(dirname $(readlink -f $0))/functions"
+#Is_Root || sudo power "$*" && Quiet_Exit && exit
 
 # ----------------------------------------------------------------------
 # Script Local Functions
 # ----------------------------------------------------------------------
-
-#TODO: move this to common functions
-Warn () { echo "$*"; return 0; }
 
 AC_Power_Is_Connected ()
 {
@@ -28,7 +25,6 @@ AC_Power_Is_Connected ()
 Display_Powersave ()
 {
 # on | off | skip
-Debug DISPLAY
 
     case $1 in
         on) dpms_seconds=60 backlight_percent=80 display_powersave=true ;;
@@ -70,7 +66,7 @@ Debug DISPLAY
     #and should probably set/reset xscreensaver settings here
 
     [ -n "${dpms_seconds:-}" ] \
-    && xset dpms 0 0 $dpms_seconds &>/dev/null
+    && As_User "xset dpms 0 0 $dpms_seconds &>/dev/null"
 
 }
 
@@ -283,6 +279,7 @@ case $1 in
         AC_Power_Is_Connected \
         && power max \
         || power min
+        Quiet_Exit
         ;;
 
     toggle)

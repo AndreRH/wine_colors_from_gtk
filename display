@@ -3,187 +3,323 @@
 # display management utility
 # es@ethanschoonover.com
 
-set -o errexit
-set -o nounset
-COMPLETE=false
-ORIGARGS="$*"
-
-
 # ----------------------------------------------------------------------
-# Find User & Environment Variables
+# Source functions library
 # ----------------------------------------------------------------------
+# handles both symlinked and original script
+# expects function file in same directory as script (or script target)
 
-#if [[ -z "${USER:-}" || "${USER:-}" == "root" ]]; then
-if false; then
-    ROOTMODE=true
-    for _windowmanager in xmonad xfce bash; # in console uses bash login
-    do _pid=$(pgrep -o $_windowmanager) && break; done
-    for _envvar in USER XAUTHORITY DISPLAY DBUS_SESSION_BUS_ADDRESS;
-    do eval export $(grep -z ^$_envvar /proc/$_pid/environ); done
-    ASUSER="su $USER -c"
-else
-    ROOTMODE=
-    ASUSER="eval"
+DEBUG=true
+. "$(dirname $(readlink -f $0))/functions"
+
+if Is_Root; then
+    As_User "display $*"
+    Completed
+    Quiet_Exit
+    exit
 fi
 
-trap _trapcheck EXIT INT TERM
-_trapcheck () { $COMPLETE && $ASUSER "notify-send -u low \"display $ORIGARGS complete\"" || $ASUSER "notify-send -u critical \"display $ORIGARGS failed\""; }
-
-STATEROOT=/var/tmp
-touch $STATEROOT/display
-touch $STATEROOT/display_xrandr_dump
-if [ "$(whoami)" == "root" ]; then
-chmod a+rw $STATEROOT/display
-chmod a+rw $STATEROOT/display_xrandr_dump
-fi
+# ---------------------------------------------------------------------
+# TODO
+#touch $STATEROOT/display_xrandr_dump
+#chmod a+rw $STATEROOT/display_xrandr_dump
 
 # ---------------------------------------------------------------------
 # Help
 # ---------------------------------------------------------------------
 
-_Help ()
+Help ()
 {
-echo "display internal | external | mirror [internal|external] | \
-span [internal|external] | cycle";
-COMPLETE=true; exit
+    echo "display internal | external | mirror [internal|external] | span [internal|external] | cycle";
+    Completed; Quiet_Exit; exit
 }
-[ -z "$*" ] && _Help
-
 
 # ---------------------------------------------------------------------
-# get state of displays
+# Global variables
 # ---------------------------------------------------------------------
+# Order of preferred dislays when one winner has to be selected
 
-# Order of preferred internal/external when one winner has to be selected
 PREFERRED_INTERNAL_DISPLAY_PREFIXES="LVDS DP HDMI VGA"
 PREFERRED_EXTERNAL_DISPLAY_PREFIXES="DP HDMI VGA"
 
-ALL_DISPLAYS="$(echo $(xrandr -q | awk '/.*connected/ {print $1}' | sort))"
-CONNECTED_DISPLAYS="$(echo $(xrandr -q | awk '/ connected/ {print $1}' | sort))"
-DISCONNECTED_DISPLAYS="$(echo $(xrandr -q | awk '/disconnected/ {print $1}' | sort))"
 
-# INTERNAL DISPLAY
-for _prefix in $PREFERRED_INTERNAL_DISPLAY_PREFIXES; do
-    for _connected_display in $CONNECTED_DISPLAYS; do
-        if [[ $_connected_display == $_prefix* ]]; then
-	    INTERNAL_DISPLAY=$_connected_display; break
+# ---------------------------------------------------------------------
+# General helper functions
+# ---------------------------------------------------------------------
+
+In_List ()
+{
+    echo "$1" | grep -q "\b$2\b"
+}
+
+Fix_Struts ()
+{
+    #As_User "xdotool key alt+q";
+    #sleep 3
+    :
+}
+
+
+# ---------------------------------------------------------------------
+# Functions to get state of displays
+# ---------------------------------------------------------------------
+
+All_Displays ()
+{
+    if [ -z "${_ALL_DISPLAYS:-}" ]; then
+
+        _ALL_DISPLAYS="$(echo $(xrandr -q \
+        | awk '/.*connected/ {print $1}' | sort))"
+
+        [ -z "${_ALL_DISPLAYS:-}" ] \
+        && Fail "Failed to find all displays"
+
+    fi
+    echo "$_ALL_DISPLAYS"
+}
+
+Connected_Displays ()
+{
+    if [ -z "${_CONNECTED_DISPLAYS:-}" ]; then
+
+        _CONNECTED_DISPLAYS="$(echo $(xrandr -q \
+        | awk '/ connected/ {print $1}' | sort))"
+
+        [ -z "${_CONNECTED_DISPLAYS:-}" ] \
+        && Fail "Failed to find connected displays"
+
+    fi
+    echo "$_CONNECTED_DISPLAYS"
+}
+
+Disconnected_Displays ()
+{
+    if [ -z "${_DISCONNECTED_DISPLAYS:-}" ]; then
+
+        _DISCONNECTED_DISPLAYS="$(echo $(xrandr -q \
+        | awk '/disconnected/ {print $1}' | sort))"
+
+        [ -z "${_DISCONNECTED_DISPLAYS:-}" ] \
+        && Fail "Failed to find disconnected displays"
+
+    fi
+    echo "$_DISCONNECTED_DISPLAYS"
+}
+
+Active_Displays ()
+{
+    if [ -z "${_ACTIVE_DISPLAYS:-}" ]; then
+    while read _line; do
+        if [[ "$_line" == [A-Z]* ]]; then 
+            set -- $_line
+            _source="$1" # LVDS1, DP1, etc
+        else
+            echo "$_line" | grep -q "[[:digit:]]\*" \
+            && _ACTIVE_DISPLAYS="${_ACTIVE_DISPLAYS:-} $_source"
         fi
-    done
-    [ -n "${INTERNAL_DISPLAY:-}" ] && break
-done; [ -z "${INTERNAL_DISPLAY:-}" ] && exit 1
+    done < <(xrandr -q 2>/dev/null | egrep -iv "^screen")
+    fi
+    echo "${_ACTIVE_DISPLAYS:-}"
+}
 
+Internal_Display ()
+{
+    if [ -z "${_INTERNAL_DISPLAY:-}" ]; then
+
+        for _prefix in $PREFERRED_INTERNAL_DISPLAY_PREFIXES; do
+
+            for _connected_display in $(Connected_Displays); do
+
+                if [[ $_connected_display == $_prefix* ]]; then
+
+        	    _INTERNAL_DISPLAY=$_connected_display; break
+
+                fi
+
+            done
+
+            [ -n "${_INTERNAL_DISPLAY:-}" ] && break
+
+        done;
+
+        [ -z "${_INTERNAL_DISPLAY:-}" ] \
+        && Fail "Failed to find internal display"
+
+    fi
+
+    echo "${_INTERNAL_DISPLAY}"
+}
+
+External_Display ()
+{
 # EXTERNAL DISPLAY (possibly none, or primary external if more than one)
-for _prefix in $PREFERRED_EXTERNAL_DISPLAY_PREFIXES; do
-    for _connected_display in $CONNECTED_DISPLAYS; do
-        if [[ $_connected_display == $_prefix* ]]; then
-	    EXTERNAL_DISPLAY=$_connected_display; break
-        fi
+
+    if [ -z "${_EXTERNAL_DISPLAY:-}" ]; then
+
+        for _prefix in $PREFERRED_EXTERNAL_DISPLAY_PREFIXES; do
+
+            for _connected_display in $(Connected_Displays); do
+
+                if [[ $_connected_display == $_prefix* ]]; then
+
+	            _EXTERNAL_DISPLAY=$_connected_display; break
+
+                fi
+
+            done
+
+            [ -n "${_EXTERNAL_DISPLAY:-}" ] && break
+
+        done
+
+    fi
+
+    echo "${_EXTERNAL_DISPLAY:-}"
+}
+
+# ---------------------------------------------------------------------
+# Functions to set display state
+# ---------------------------------------------------------------------
+
+Single_Display ()
+{
+# Turn on selected display and turn off all other displays.
+# Example: Single_Display DP1
+
+    # possible this is being called with a null variable
+    # -----------------------------------------------------------------
+    [ -z "${1:-}" ] && return 1
+
+    # make sure requested display is in the list of connected displays
+    # -----------------------------------------------------------------
+    In_List "$(Connected_Displays)" "$1" || return 1
+
+    # build up list of displays that aren't our target and prepare to
+    # turn them off
+    # -----------------------------------------------------------------
+    for _disp in $(All_Displays); do
+        [[ $_disp != $1 && -n "$_disp" ]] \
+        && _off="${_off:-}--output $_disp --off ";
     done
-    [ -n "${EXTERNAL_DISPLAY:-}" ] && break
-done
 
-# ---------------------------------------------------------------------
-# process args
-# ---------------------------------------------------------------------
+    # on, or off and then on
+    # set out target display to primary, on, auto, native scale
+    # and if that fails then attempt to do it again but separate the
+    # display off / target display on steps (can address some failures)
+    # first turning the target off in case of error
+    # -----------------------------------------------------------------
+    _cmdprefix="xrandr ${_off:-}--output $1"
+    _cmdsuffix="--scale 1x1 --primary --auto"
+    if ! $_cmdprefix $_cmdsuffix &>/dev/null; then
+        $_cmdprefix --off &>/dev/null
+        $_cmdprefix $_cmdsuffix &>/dev/null
+    fi
 
-_Xmonad_Restart () {
-$ASUSER "xdotool key alt+q";
-sleep 3
+    Fix_Struts
 }
 
-_Single_Display ()
+Mirror_Display ()
 {
-# Turn on selected display and turn off all other displays. Example: _Single_Display DP1
-#
-[ -z "${1:-}" ] && return 1 # possible this is being called with a null variable
-echo $CONNECTED_DISPLAYS | grep -q "\b${1}\b" &>/dev/null || return 1 # requested display not connected
-for _disp in $ALL_DISPLAYS; do
-    [[ $_disp != $1 && -n "$_disp" ]] && _off="${_off:-}--output $_disp --off ";
-done
-if ! xrandr ${_off:-}--output $1 --scale 1x1 --primary --auto &>/dev/null; then
-    xrandr ${_off:-}--output $1 --off &>/dev/null
-    xrandr ${_off:-}--output $1 --scale 1x1 --primary --auto &>/dev/null
-fi
+    declare -Ag _NATIVE_RESOLUTION
+    # requires at least one external display to be connected
+    # -----------------------------------------------------------------
+    [[ -z "$(External_Display)" ]] && return 1
 
-# if screensaver is running, we don't want to use xdotool
-#[ -z "${2:-}" ] && _Xmonad_Restart || $ASUSER "/usr/bin/slowrestart&" # if screensaver is running, we don't want to use xdotool
-if [ -z "${2:-}" ]; then
-    _Xmonad_Restart
-else
-    #$ASUSER "/usr/bin/slowrestart &"
-    # not pretty. could end up in a bit of a race condition
-    eval "sleep 60 && display reset" &
-fi
-}
+    # calling this script in the format "display mirror internal"
+    # anchors the mirror to the internal display,
+    # and scaling the external display to match the internal, rather
+    # than the default state of scaling to the external display
+    # -----------------------------------------------------------------
+    [[ "${1:-}" == "internal" ]] \
+    && _MIRROR_EXTERNAL_DISPLAY="$(Internal_Display)" \
+       _MIRROR_INTERNAL_DISPLAY="$(External_Display)" \
+    || _MIRROR_EXTERNAL_DISPLAY="$(External_Display)" \
+       _MIRROR_INTERNAL_DISPLAY="$(Internal_Display)"
 
-_Mirror_Display ()
-{
-[[ -z "$EXTERNAL_DISPLAY" ]] && return 1; # requires at least one external display
-[[ "${1:-}" == "internal" ]] && SWAP=$INTERNAL_DISPLAY INTERNAL_DISPLAY=$EXTERNAL_DISPLAY EXTERNAL_DISPLAY=$SWAP
+    # get native resolution for each connected display
+    # -----------------------------------------------------------------
     while read _line; do
         if [[ "$_line" == [A-Z]* ]]; then # any line with initial Alpha
             set -- $_line
             _source="$1" # LVDS1, DP1, etc
         else
             # extract native resolution from mode line
-            if [[ -z "${NATIVE_RESOLUTION[$_source]:-}" ]]; then
+            if [[ -z "${_NATIVE_RESOLUTION[$_source]:-}" ]]; then
                 set -- $_line
-                declare -Ag NATIVE_RESOLUTION[$_source]="$(echo "$1" | sed "s/\([[:digit:]]*x[[:digit:]]*\)\?.*/\1/")"
+                declare -Ag _NATIVE_RESOLUTION[$_source]="$(echo "$1" | sed "s/\([[:digit:]]*x[[:digit:]]*\)\?.*/\1/")"
             fi
         fi
     done < <(xrandr -q 2>/dev/null | egrep -iv "^screen")
-    _internal_resolution="${NATIVE_RESOLUTION[$INTERNAL_DISPLAY]}"
-    _external_resolution="${NATIVE_RESOLUTION[$EXTERNAL_DISPLAY]}"
+    _internal_resolution="${_NATIVE_RESOLUTION[$_MIRROR_INTERNAL_DISPLAY]}"
+    _external_resolution="${_NATIVE_RESOLUTION[$_MIRROR_EXTERNAL_DISPLAY]}"
+
+    # extract x & y values, calculate scaling
+    # -----------------------------------------------------------------
     set -- $(echo $_internal_resolution | tr "x" " "); _internal_resolution_x="$1"; _internal_resolution_y="$2"
     set -- $(echo $_external_resolution | tr "x" " "); _external_resolution_x="$1"; _external_resolution_y="$2"
     _x_scaling="$(echo "scale=4; $_external_resolution_x/$_internal_resolution_x" | bc)"
     _y_scaling="$(echo "scale=4; $_external_resolution_y/$_internal_resolution_y" | bc)"
+
+    # prepare xrandr commands
+    # -----------------------------------------------------------------
     _internal_cmd="--scale ${_x_scaling}x${_y_scaling} --auto"
-    _external_cmd="--same-as ${INTERNAL_DISPLAY} --scale 1x1 --primary --auto"
-    for _disp in $ALL_DISPLAYS; do
-        if [[ "$INTERNAL_DISPLAY" != "$_disp" && "$EXTERNAL_DISPLAY" != "$_disp" && -n "$_disp" ]]; then _off="${_off:-}--output $_disp --off "; fi
+    _external_cmd="--same-as ${_MIRROR_INTERNAL_DISPLAY} --scale 1x1 --primary --auto"
+
+    # make sure to turn off other displays
+    # -----------------------------------------------------------------
+    for _disp in $(All_Displays); do
+        if [[ "$_MIRROR_INTERNAL_DISPLAY" != "$_disp" && "$_MIRROR_EXTERNAL_DISPLAY" != "$_disp" && -n "$_disp" ]]; then _off="${_off:-}--output $_disp --off "; fi
     done
-    # deal with occasional failure to switch (e.g. from mirror external to mirror internal or vice versa)
-    if ! xrandr ${_off:-}--output $INTERNAL_DISPLAY $_internal_cmd --output $EXTERNAL_DISPLAY $_external_cmd; then
-        xrandr --output $INTERNAL_DISPLAY --off --output $EXTERNAL_DISPLAY --off
-        xrandr ${_off:-}--output $INTERNAL_DISPLAY $_internal_cmd --output $EXTERNAL_DISPLAY $_external_cmd || xrandr --output $INTERNAL_DISPLAY --auto --output $EXTERNAL_DISPLAY --off
+
+    # deal with occasional failure to switch
+    # (e.g. from mirror external to mirror internal or vice versa)
+    # -----------------------------------------------------------------
+    if ! xrandr ${_off:-}--output $_MIRROR_INTERNAL_DISPLAY $_internal_cmd --output $_MIRROR_EXTERNAL_DISPLAY $_external_cmd; then
+        xrandr --output $_MIRROR_INTERNAL_DISPLAY --off --output $_MIRROR_EXTERNAL_DISPLAY --off
+        xrandr ${_off:-}--output $_MIRROR_INTERNAL_DISPLAY $_internal_cmd --output $_MIRROR_EXTERNAL_DISPLAY $_external_cmd \
+        || xrandr --output $_MIRROR_INTERNAL_DISPLAY --auto --output $_MIRROR_EXTERNAL_DISPLAY --off
     fi
-    _Xmonad_Restart
+    Fix_Struts
 }
 
-_Span_Display ()
+Span_Display ()
 {
 [[ "${1:-}" == "internal" ]] && _intprimary="--primary" _extprimary="" || _intprimary="" _extprimary="--primary"
-[[ -z "$EXTERNAL_DISPLAY" ]] && return 1; # requires at least one external display
-for _disp in $ALL_DISPLAYS; do
+[[ -z "$(External_Display)" ]] && return 1; # requires at least one external display
+for _disp in $(All_Displays); do
+
         # if it's connected and neither internal nor primary external, append to on cmd (on, not primary, above internal)
         # if it's not connected, append to off cmd
-        if [[ "$INTERNAL_DISPLAY" != "$_disp" && "$EXTERNAL_DISPLAY" != "$_disp" && -n "$_disp" ]]; then
-            echo "$DISCONNECTED_DISPLAYS" | grep -q "\b$_disp\b" && [[ $_disp != $1 ]] && _off="${_off:-}--output $_disp --off ";
+        if [[ "$(Internal_Display)" != "$_disp" && "$(External_Display)" != "$_disp" && -n "$_disp" ]]; then
+
+#TODO: why am I checking $1 here and below in this function?
+            In_List "$(Disconnected_Displays)" "$_disp" && [[ $_disp != ${1:-} ]] && _off="${_off:-}--output $_disp --off ";
 
             #DEBUG: switch to turning these off as welldue to problem with turning on extra displays -- e.g. "xrandr: cannot find crtc for output VGA1"
-            #echo "$CONNECTED_DISPLAYS" | grep -q "\b$_disp\b" && [[ $_disp != $1 ]] && _on="${_on:-}--output $_disp --scale 1x1 --auto --above $INTERNAL_DISPLAY ";
-            echo "$CONNECTED_DISPLAYS" | grep -q "\b$_disp\b" && [[ $_disp != $1 ]] && _off="${_off:-}--output $_disp --off ";
+            #echo "$(Connected_Displays)" | grep -q "\b$_disp\b" && [[ $_disp != ${1:-} ]] && _on="${_on:-}--output $_disp --scale 1x1 --auto --above $(Internal_Display) ";
+
+            In_List "$(Connected_Displays)" "$_disp" && [[ $_disp != ${1:-} ]] && _off="${_off:-}--output $_disp --off ";
+
         fi
 done
-eval "xrandr ${_off:-}${_on:-}--output $INTERNAL_DISPLAY --scale 1x1 ${_intprimary} --auto --output $EXTERNAL_DISPLAY --scale 1x1 ${_extprimary} --auto --above $INTERNAL_DISPLAY"
-_Xmonad_Restart
+eval "xrandr ${_off:-}${_on:-}--output $(Internal_Display) --scale 1x1 ${_intprimary} --auto --output $(External_Display) --scale 1x1 ${_extprimary} --auto --above $(Internal_Display)"
+Fix_Struts
 }
 
-_Tablet_Mode ()
+Tablet_Mode ()
 {
 case $1 in
     on)
-        _Mirror_Display
+        Mirror_Display
 
-        xrandr --output $INTERNAL_DISPLAY --rotate inverted
+        xrandr --output $(Internal_Display) --rotate inverted
         for _device in $(xsetwacom --list devices | sed "s/.*id: \(..\).*$/\1/"); do xsetwacom --set $_device Rotate half; done
 
         if ! lsusb | grep -q "HHKB"; then # no external HHKB usb keyboard present
 
             # get internal display resolution (even if scaled)
-            _xres=$(xrandr -q | grep "$INTERNAL_DISPLAY" \
-            | sed "s/^$INTERNAL_DISPLAY connected \([[:digit:]]*\)x\([[:digit:]]*\).*$/\1/")
+            _xres=$(xrandr -q | grep "$(Internal_Display)" \
+            | sed "s/^$(Internal_Display) connected \([[:digit:]]*\)x\([[:digit:]]*\).*$/\1/")
 
             # set on screen keyboard icon size and location
             [ $_xres -gt 1366 ] && _iconres=64 || _iconres=48
@@ -209,64 +345,58 @@ case $1 in
     ;;
     off)
         killall onboard
-        xrandr --output $INTERNAL_DISPLAY --rotate normal
+        xrandr --output $(Internal_Display) --rotate normal
         for _device in $(xsetwacom --list devices | sed "s/.*id: \(..\).*$/\1/"); do xsetwacom --set $_device Rotate none; done
     ;;
     toggle)
-        [[ "$(xrandr -q | awk '$1 ~ /LVDS1/ {print $4}')" == "inverted" ]] && _Tablet_Mode off || _Tablet_Mode on
+        [[ "$(xrandr -q | awk '$1 ~ /LVDS1/ {print $4}')" == "inverted" ]] && Tablet_Mode off || Tablet_Mode on
     ;;
     auto)
         if [ "$(cat /sys/devices/platform/thinkpad_acpi/hotkey_tablet_mode)" -gt 0 ]; then
         echo "ON"
-            _Tablet_Mode on
+            Tablet_Mode on
         else
         echo "OFF"
-            _Tablet_Mode off
+            Tablet_Mode off
         fi
     ;;
 esac
 }
 
-_Simple_Cycle ()
+Simple_Cycle ()
 {
-    while read _line; do
-        if [[ "$_line" == [A-Z]* ]]; then # any line with initial Alpha
-            set -- $_line
-            _source="$1" # LVDS1, DP1, etc
-        else
-            # extract native resolution from mode line
-            echo "$_line" | grep -q "[[:digit:]]\*" && ACTIVE_DISPLAYS="$ACTIVE_DISPLAYS $_source"
-        fi
-    done < <(xrandr -q 2>/dev/null | egrep -iv "^screen")
-    echo "$ACTIVE_DISPLAYS" | grep -q "\b$INTERNAL_DISPLAY\b" && _Single_Display $EXTERNAL_DISPLAY || _Single_Display $INTERNAL_DISPLAY
+    In_List "$(Active_Displays)" "$(Internal_Display)" \
+    && Single_Display $(External_Display) \
+    || Single_Display $(Internal_Display)
 }
 
-_Record_State ()
+Snapshot ()
 {
-    xrandr -q > $STATEROOT/display_xrandr_dump;
+    As_User xrandr -q > /var/tmp/xrandr_dump;
 }
 
-_Diff_State ()
+Matches_Snapshot ()
 {
-    [ ! -e $STATEROOT/display_xrandr_dump ] && return 1
-    diff $STATEROOT/display_xrandr_dump <(xrandr -q) &>/dev/null && return 0 || return 1
+    [ ! -e /var/tmp/xrandr_dump ] && return 1
+    diff /var/tmp/xrandr_dump <(As_User "xrandr -q") &>/dev/null && return 0 || return 1
 }
 
 case $1 in
-    auto) _Diff_State \
-          || _Single_Display $EXTERNAL_DISPLAY ${2:-}\
-          || _Single_Display $INTERNAL_DISPLAY ${2:-}; ;;
-    record) _Record_State; ;;
-    external) _Single_Display $EXTERNAL_DISPLAY ;;
-    internal) _Single_Display $INTERNAL_DISPLAY ;;
-    mirror) _Mirror_Display ${2:-} ;;
-    span) _Span_Display ${2:-} ;;
-    tablet) _Tablet_Mode ${2:-}; ;;
-    cycle) _Simple_Cycle ;;
+    auto) Matches_Snapshot \
+          || Single_Display $(External_Display) ${2:-}\
+          || Single_Display $(Internal_Display) ${2:-}; ;;
+    record) Snapshot ;;
+    external) Single_Display $(External_Display) ;;
+    internal) Single_Display $(Internal_Display) ;;
+    mirror) Mirror_Display ${2:-} ;;
+    span) Span_Display ${2:-} ;;
+    tablet) Tablet_Mode ${2:-}; ;;
+    cycle) Simple_Cycle ;;
     consolelock) physlock -dsu $USER; ;;
-    lock) $ASUSER "xscreensaver-command -lock"; ;;
-    unlock) $ASUSER "xscreensaver-command -deactivate &>/dev/null"; ;;
-    reset) _Xmonad_Restart; ;;
+    lock) As_User "xscreensaver-command -lock"; ;;
+    unlock) As_User "xscreensaver-command -deactivate &>/dev/null"; ;;
+    reset) Fix_Struts; ;;
+    *) Help
 esac
 
-COMPLETE=true
+Completed

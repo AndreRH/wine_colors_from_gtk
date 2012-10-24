@@ -5,7 +5,7 @@
 cd $HOME/bin
 [ -e "$HOME/.ssh/id_rsa" ] && git remote set-url origin git@github.com:altercation/es-bin.git
 
-for _util in dispatch display power slowrestart bloop volume wireless; do
+for _util in dispatch display power slowrestart bloop volume wireless system; do
     [ ! -e /usr/bin/$_util ] && sudo ln -sf "$HOME/bin/$_util" /usr/bin/$_util
 done
 
