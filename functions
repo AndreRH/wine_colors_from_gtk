@@ -15,6 +15,8 @@ STATEFILE="/var/tmp/$(basename "$0")"
 SCRIPT_COMPLETE=false
 INITIAL_ARGS="$*"
 
+DEBUG=${DEBUG:-false} # default if not set in main script
+
 # ----------------------------------------------------------------------
 # Functions
 # ----------------------------------------------------------------------
@@ -26,6 +28,9 @@ INITIAL_ARGS="$*"
 # THIS_IS_A_GLOBAL_VARIABLE
 # _THIS_IS_A_FUNCTION_LOCAL_STATE_VARIABLE (a global used only in 1 func)
 # _this_is_a_local_temp_variable
+
+Set_Initial_Args () { INITIAL_ARGS="$*"; }
+Get_Initial_Args () { echo "${INITIAL_ARGS:-}"; }
 
 Is_Root ()
 {
@@ -48,7 +53,7 @@ Trap ()
     if $SCRIPT_COMPLETE; then
         ${QUIET_EXIT:-false} || As_User "notify-send -u low \"$(basename $0) $INITIAL_ARGS\""
     else # failed to complete script
-        As_User "notify-send -u critical \"FAILED: $(basename $0) $INITIAL_ARGS${FAILURE:+ - }${FAILURE:-}\""
+        As_User "notify-send -u critical \"FAILED: $(basename $0) $(Get_Initial_Args)${FAILURE:+ - }${FAILURE:-}\""
     fi
 }
 

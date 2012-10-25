@@ -11,7 +11,20 @@
 
 DEBUG=true
 . "$(dirname $(readlink -f $0))/functions"
-#Is_Root || sudo power "$*" && Quiet_Exit && exit
+
+# ----------------------------------------------------------------------
+# Run as root, not user
+# ----------------------------------------------------------------------
+if ! Is_Root && [[ "${1:-}" != "recursive" ]] ; then
+    sudo power recursive $*
+    Quiet_Exit
+    Completed
+    exit
+elif [[ "${1:-}" == "recursive" ]] && Is_Root; then
+    shift; Set_Initial_Args "$*"
+else
+    : # running correctly as user, non recursive
+fi
 
 # ----------------------------------------------------------------------
 # Script Local Functions
@@ -346,6 +359,12 @@ case $1 in
         CPU_Powersave off
         Remove_State
         Quiet_Exit
+        ;;
+
+    displayforce)
+        # used when display fails to turn back on
+        Display_Powersave off
+        #Quiet_Exit
         ;;
 
     *) exit ;;

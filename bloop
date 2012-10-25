@@ -2,13 +2,12 @@
 
 case $1 in
 
-    startup) sleep 0.25; notes="233.08 261.63 207.65 103.83 155.56" delay=100 length=150 ;;
-
-    shutdown) notes="196.00 220.00 174.61 87.31 130.81" delay=100 length=150 ;;
+    startup) sleep 0.25; notes="233.08 261.63 207.65 103.83 155.56" delay=0 length=150 ;;
+    shutdown) notes="196.00 220.00 174.61 87.31 130.81" delay=0 length=150 ;;
     sleep) notes="$(echo $(seq 3000 50 3500))" delay=0 length=100 ;;
     resume) notes="$(echo $(seq 3500 -50 3000))" delay=0 length=100 ;;
 
 esac
 
-#for note in $notes; do sudo beep -f $note -l $length -D $delay; done; sleep 1;
-for note in $notes; do sudo beep -f $note -l $length ; echo $note; done; sleep 1;
+for note in $notes; do sudo beep -f $note -l $length -D $delay; done; sleep 1;
+#for note in $notes; do sudo beep -f $note -l $length ; echo $note; done; sleep 1;

@@ -8,6 +8,7 @@
 # handles both symlinked and original script
 # expects function file in same directory as script (or script target)
 
+DEBUG=true
 . "$(dirname $(readlink -f $0))/functions"
 
 # ----------------------------------------------------------------------
@@ -19,29 +20,34 @@ case $1 in
     boot)
         bloop startup
         sudo wireless all restore
-        power auto; exit
+        power auto
+        Quiet_Exit
         ;;
 
     sleep|suspend)
-        display lock
-        bloop sleep
-        sudo systemctl suspend
-        display auto norestart
+        display darklock
+        bloop shutdown
+        sudo systemctl suspend || true
+        bloop startup
+        display auto
         display unlock
         power auto
-        bloop resume
+        Quiet_Exit
+        Completed
         ;;
 
     poweroff|off|shutdown)
         bloop shutdown
         power preshutdown
         rmmod e1000e
+        Quiet_Exit
         sudo systemctl poweroff || exit 1
         ;;
 
     reboot|restart)
         bloop shutdown
         power preshutdown
+        Quiet_Exit
         sudo systemctl reboot || exit 1
         ;;
 
@@ -51,3 +57,5 @@ case $1 in
         ;;
 
 esac
+
+Completed

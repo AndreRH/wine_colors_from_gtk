@@ -1,0 +1,6 @@
+#!/bin/bash
+
+pacman -Q trayer-srg-git &>/dev/null && SRGCMD="--monitor primary"
+
+ps -A | grep -q "trayer" && killall trayer
+trayer --edge top --align right --SetDockType true --SetPartialStrut true --expand true --widthtype percent --width 7 --transparent true --tint 0x073642 --alpha 0 --margin 1 --height 20 ${SRGCMD:-} &
