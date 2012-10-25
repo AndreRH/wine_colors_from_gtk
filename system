@@ -9,7 +9,9 @@
 # expects function file in same directory as script (or script target)
 
 DEBUG=true
-. "$(dirname $(readlink -f $0))/functions"
+functions="$(dirname $(readlink -f $0))/functions"
+[ -e "$functions" ] || functions=/usr/bin/functions
+. "$functions"
 
 # ----------------------------------------------------------------------
 # System Functions
@@ -47,6 +49,7 @@ case $1 in
     reboot|restart)
         bloop shutdown
         power preshutdown
+        rmmod e1000e
         Quiet_Exit
         sudo systemctl reboot || exit 1
         ;;

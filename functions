@@ -69,7 +69,7 @@ Completed ()
 
 Remove_State ()
 {
-    [ -e "$STATEFILE" ] && rm "$STATEFILE"
+    if [ -e "$STATEFILE" ]; then rm "$STATEFILE"; fi
 }
 
 Set_State ()
