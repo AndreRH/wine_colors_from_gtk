@@ -5,7 +5,17 @@ QUEUEDIR=$MAILDATA/queue
 LOCKFILE="$QUEUEDIR/.lock"
 MAXWAIT=120
 
+if [ "${1:-}" == "mailqsend" ]; then
+	# called via mailqsend for instant queue processing
+	# so notifications should be presented as immediate, not queued
+	QUEUED=
+	shift
+else
+	QUEUED=queued
+fi
+
 OPTIONS=$@
+
 
 # wait for a lock that another instance has set
 WAIT=0
@@ -40,18 +50,39 @@ for MAILFILE in *.mail; do
 	if [ ! -f "$MSMTPFILE" ]; then
 		echo "No corresponding file $MSMTPFILE found"
 		echo "FAILURE"
+		#notify-send -u critical "$(basename $0) failure: no corresponding file $MSMTPFILE found"
 		continue
+                SENDFAIL=$(( ${SENDFAIL:-0} + 1 ))
 	fi
 	msmtp $OPTIONS `cat "$MSMTPFILE"` < "$MAILFILE"
 	if [ $? -eq 0 ]; then
 		rm "$MAILFILE" "$MSMTPFILE"
 		echo "$MAILFILE sent successfully"
+                #notify-send -u low "Mail queue: $MAILFILE sent successfully"
+                SENDPASS=$(( ${SENDPASS:-0} + 1 ))
 	else
 		echo "FAILURE"
+                #notify-send -u low "$(basename $0) failure"
+                SENDFAIL=$(( ${SENDFAIL:-0} + 1 ))
 	fi
 done
 
 # remove the lock
 rm -f "$LOCKFILE"
+
+if [ ${SENDFAIL:-0} -gt 0 ]; then
+        MAILLEFT=$(ls -1 *.mail | wc -l)
+	ERRMSG="Errors encountered sending queued mail"
+        [ $MAILLEFT -gt 1 ] && MAILSFX=s REMAINSFX= || MAILSFX= REMAINSFX=s
+        [ $MAILLEFT -gt 0 ] && ERRMSG="${ERRMSG} ; $MAILLEFT mail${MAILSFX:-} remain${REMAINSFX:-} in queue" || true
+	notify-send -u critical "$ERRMSG"
+fi
+
+if [ ${SENDPASS:-0} -gt 0 ]; then
+        [ ${SENDPASS:-0} -gt 1 ] && MAILSFX=s REMAINSFX= || MAILSFX= REMAINSFX=s
+	[ -z "${QUEUED:-}" ] && SENDPASS= || true # for instantly processed queue, don't inform number
+        SNDMSG="${SENDPASS:-}${SENDPASS+ }$QUEUED${QUEUED+ }mail${MAILSFX:-} sent" || true
+	notify-send -u low "$SNDMSG"
+fi
 
 exit 0
