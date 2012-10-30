@@ -8,6 +8,7 @@
 # handles both symlinked and original script
 # expects function file in same directory as script (or script target)
 
+QUIET_SUCCESS=false
 DEBUG=true
 functions="$(dirname $(readlink -f $0))/functions"
 [ -e "$functions" ] || functions=/usr/bin/functions
@@ -23,7 +24,6 @@ case $1 in
         bloop startup
         sudo wireless all restore
         power auto
-        Quiet_Exit
         ;;
 
     sleep|suspend)
@@ -34,15 +34,12 @@ case $1 in
         display auto
         display unlock
         power auto
-        Quiet_Exit
-        Completed
         ;;
 
     poweroff|off|shutdown)
         bloop shutdown
         power preshutdown
         rmmod e1000e
-        Quiet_Exit
         sudo systemctl poweroff || exit 1
         ;;
 
@@ -50,7 +47,6 @@ case $1 in
         bloop shutdown
         power preshutdown
         rmmod e1000e
-        Quiet_Exit
         sudo systemctl reboot || exit 1
         ;;
 
@@ -60,5 +56,3 @@ case $1 in
         ;;
 
 esac
-
-Completed

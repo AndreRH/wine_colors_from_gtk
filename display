@@ -10,6 +10,7 @@
 # expects function file in same directory as script (or script target)
 
 DEBUG=true
+QUIET_SUCCESS=false
 functions="$(dirname $(readlink -f $0))/functions"
 [ -e "$functions" ] || functions=/usr/bin/functions
 . "$functions"
@@ -19,13 +20,12 @@ functions="$(dirname $(readlink -f $0))/functions"
 # ----------------------------------------------------------------------
 if Is_Root && [[ "${1:-}" != "recursive" ]] ; then
     As_User "display recursive $*"
-    Quiet_Exit
-    Completed
+    QUIET_SUCCESS=true
     exit
 elif [[ "${1:-}" == "recursive" ]] && ! Is_Root; then
     shift; Set_Initial_Args "$*"
 else
-    : # running correctly as root, non recursive
+    : # running correctly as user, non recursive
 fi
 
 
@@ -42,7 +42,7 @@ Help ()
 {
     echo -n "display internal | external | mirror [internal|external] "
     echo "| span [internal|external] | cycle";
-    Completed; Quiet_Exit; exit
+    QUIET_SUCCESS=true; exit
 }
 
 # ---------------------------------------------------------------------
@@ -503,6 +503,12 @@ Matches_Snapshot ()
     diff /var/tmp/xrandr_dump <(echo "$CACHED_XRANDR") && return 0 || return 1
 }
 
+Make_Safe ()
+{
+    Init_Internal_Display
+    Matches_Snapshot || Single_Display $INTERNAL_DISPLAY
+}
+
 Kill_Zombies ()
 {
     Init_Internal_Display
@@ -523,7 +529,7 @@ fi
 }
 
 case $1 in
-    auto) ;;
+    auto) Make_Safe ;;
     record) notify-send -u critical "RECORD CALLED" ;;
     external) External_Display ;;
     internal) Internal_Display ;;
@@ -531,13 +537,12 @@ case $1 in
     span) Span_Display ${2:-} ;;
     tablet) Tablet_Mode ${2:-}; ;;
     cycle) Simple_Cycle ;;
-    consolelock) Quiet_Exit; physlock -dsu $USER; ;;
-    lock) Quiet_Exit; As_User "xscreensaver-command -lock"; ;;
-    darklock) Quiet_Exit; As_User "xset dpms force off"; As_User "xscreensaver-command -lock"; ;;
-    unlock) Quiet_Exit; sleep 0.5; As_User "xscreensaver-command -deactivate &>/dev/null"; ;;
-    reset) Quiet_Exit; Fix_Struts; ;;
+    consolelock) QUIET_SUCCESS=true; physlock -dsu $USER; ;;
+    lock) QUIET_SUCCESS=true; As_User "xscreensaver-command -lock"; ;;
+    darklock) QUIET_SUCCESS=true; As_User "xset dpms force off"; As_User "xscreensaver-command -lock"; ;;
+    unlock) QUIET_SUCCESS=true; sleep 0.5; As_User "xscreensaver-command -deactivate &>/dev/null"; ;;
+    reset) QUIET_SUCCESS=true; Fix_Struts; ;;
     *) Help
 esac
 
 Snapshot
-Completed

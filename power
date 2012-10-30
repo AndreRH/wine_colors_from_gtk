@@ -9,7 +9,10 @@
 # handles both symlinked and original script
 # expects function file in same directory as script (or script target)
 
-DEBUG=true
+DEBUG=false
+QUIET_SUCCESS=false # default is true
+QUIET_FAILURE=false # default is false
+
 functions="$(dirname $(readlink -f $0))/functions"
 [ -e "$functions" ] || functions=/usr/bin/functions
 . "$functions"
@@ -19,24 +22,26 @@ functions="$(dirname $(readlink -f $0))/functions"
 # ----------------------------------------------------------------------
 if ! Is_Root && [[ "${1:-}" != "recursive" ]] ; then
     sudo power recursive $*
-    Quiet_Exit
-    Completed
+    QUIET_SUCCESS=true
     exit
 elif [[ "${1:-}" == "recursive" ]] && Is_Root; then
     shift; Set_Initial_Args "$*"
 else
     : # running correctly as user, non recursive
+    true
 fi
 
 # ----------------------------------------------------------------------
 # Script Local Functions
 # ----------------------------------------------------------------------
 
+# ----------------------------------------------------------------------
 AC_Power_Is_Connected ()
 {
     [[ $(cat /sys/class/power_supply/AC/online) > 0 ]]
 }
 
+# ----------------------------------------------------------------------
 Display_Powersave ()
 {
 # on | off | skip
@@ -85,6 +90,7 @@ Display_Powersave ()
 
 }
 
+# ----------------------------------------------------------------------
 Bus_ASPM_Wacom_Powersave ()
 {
 # Examples:
@@ -165,6 +171,7 @@ Debug BUS
 
 }
 
+# ----------------------------------------------------------------------
 CPU_Powersave ()
 {
 
@@ -199,6 +206,7 @@ CPU_Powersave ()
     # cpupower -c all set --sched-smt $_sched # &>/dev/null
 }
 
+# ----------------------------------------------------------------------
 Wifi_Powersave ()
 {
 Debug WIFI
@@ -219,6 +227,7 @@ Debug WIFI
     # echo -n $_wifipwr > /sys/module/iwlwifi/parameters/power_save
 }
 
+# ----------------------------------------------------------------------
 Disk_Powersave ()
 {
 Debug DISK POWERAVE
@@ -268,6 +277,7 @@ Debug DISK POWERAVE
 
 }
 
+# ----------------------------------------------------------------------
 Soundcard_Powersave ()
 {
 Debug SOUND CARD
@@ -292,9 +302,9 @@ case $1 in
 
     auto)
         AC_Power_Is_Connected \
-        && power max silent \
-        || power min silent
-        Quiet_Exit
+        && power max \
+        || power min 
+        QUIET_SUCCESS=true
         ;;
 
     toggle)
@@ -302,11 +312,11 @@ case $1 in
         [[ "$(Get_State)" == "${_modes[0]}" ]] \
         && power ${_modes[1]} \
         || power ${_modes[0]}
-        Quiet_Exit
+        QUIET_SUCCESS=true
         ;;
 
     cycle)
-        _modes=(min max mov)
+        _modes=(min max miv mov)
         _mode="auto"
         for _s in $(seq 0 $((${#_modes[@]} - 1))); do 
             if [[ "$(Get_State)" == "${_modes[$_s]}" ]]; then
@@ -314,7 +324,8 @@ case $1 in
             fi
         done
 	power $_mode
-        Quiet_Exit
+        QUIET_SUCCESS=true
+        exit 0
         ;;
 
     min)
@@ -324,7 +335,7 @@ case $1 in
         Display_Powersave on
         Soundcard_Powersave on
         Wifi_Powersave on
-        [ "${2:-}" == "silent" ] && INITIAL_ARGS="$1"
+        #[ "${2:-}" == "silent" ] && INITIAL_ARGS="$1"
         Set_State
         ;;
 
@@ -338,6 +349,20 @@ case $1 in
         [ "${2:-}" == "silent" ] && INITIAL_ARGS="$1"
         Set_State
         ;;
+
+    miv)
+        # minimum power, display in movie mode
+        Bus_ASPM_Wacom_Powersave on on on
+        CPU_Powersave on
+        Disk_Powersave on
+        Display_Powersave off
+        Soundcard_Powersave on
+        Wifi_Powersave on
+        [ "${2:-}" == "silent" ] && INITIAL_ARGS="$1"
+        Set_State
+        #TODO xscreensaver no screen timeout (or hours)
+        ;;
+
 
     max)
         Bus_ASPM_Wacom_Powersave off off off
@@ -359,18 +384,19 @@ case $1 in
         Wifi_Powersave off
         [ "${2:-}" == "silent" ] && INITIAL_ARGS="$1"
         Set_State
+        #TODO xscreensaver no screen timeout (or hours)
         ;;
 
     preshutdown)
         CPU_Powersave off
         Remove_State
-        Quiet_Exit
+        QUIET_SUCCESS=true
         ;;
 
     displayforce)
         # used when display fails to turn back on
         Display_Powersave off
-        #Quiet_Exit
+        QUIET_SUCCESS=true
         ;;
 
     *) exit ;;
@@ -381,5 +407,4 @@ esac
 # NMI WATCHDOG ----------------------------------------------------
 #$nmi_watchdog && _nmi=1 || _nmi=0; sysctl -q kernel.nmi_watchdog=$_nmi
 
-[ "${2:-}" == "silent" ] && Quiet_Exit
-Completed
+[ "${2:-}" == "silent" ] && QUIET_SUCCESS=true || true

@@ -15,6 +15,12 @@ STATEFILE="/var/tmp/$(basename "$0")"
 SCRIPT_COMPLETE=false
 INITIAL_ARGS="$*"
 
+# whether to automatically generate a dbus notification of success
+QUIET_SUCCESS=${QUIET_SUCCESS:-true}
+
+# whether script failure should be silent (no failure dbus notification)
+QUIET_FAILURE=${QUIET_FAILURE:-false}
+
 DEBUG=${DEBUG:-false} # default if not set in main script
 
 # ----------------------------------------------------------------------
@@ -29,17 +35,16 @@ DEBUG=${DEBUG:-false} # default if not set in main script
 # _THIS_IS_A_FUNCTION_LOCAL_STATE_VARIABLE (a global used only in 1 func)
 # _this_is_a_local_temp_variable
 
+Flash () { As_User "notify-send -u low        \"$*\""; }
+Alert ()  { As_User "notify-send -u normal     \"$*\""; }
+Warn ()   { As_User "notify-send -u critical   \"$*\""; }
+
 Set_Initial_Args () { INITIAL_ARGS="$*"; }
 Get_Initial_Args () { echo "${INITIAL_ARGS:-}"; }
 
 Is_Root ()
 {
     [[ "$(whoami)" == "root" || "$USER" == "root" || -z "$USER" ]]
-}
-
-Warn ()
-{
-    echo "$*" && return 0
 }
 
 Fail ()
@@ -50,44 +55,12 @@ Fail ()
 
 Trap ()
 {
-    if $SCRIPT_COMPLETE; then
-        ${QUIET_EXIT:-false} || As_User "notify-send -u low \"$(basename $0) $INITIAL_ARGS\""
-    else # failed to complete script
-        As_User "notify-send -u critical \"FAILED: $(basename $0) $(Get_Initial_Args)${FAILURE:+ - }${FAILURE:-}\""
+TEST="$?"
+    if [ "$TEST" -eq 0 ]; then
+        ${QUIET_SUCCESS:-false} || Flash "$(basename $0) $INITIAL_ARGS"
+    elif ! ${QUIET_FAILURE:-false}; then
+        Warn "$TEST FAILED: $(basename $0) $(Get_Initial_Args)${FAILURE:+ - }${FAILURE:-}"
     fi
-}
-
-Quiet_Exit ()
-{
-    QUIET_EXIT=true
-}
-
-Completed ()
-{
-    SCRIPT_COMPLETE=true
-}
-
-Remove_State ()
-{
-    if [ -e "$STATEFILE" ]; then rm "$STATEFILE"; fi
-}
-
-Set_State ()
-{
-# takes one argument, the value of the state to be recorded
-# will correctly error exit if missing value of STATE
-# _Record_State min
-    echo -n "$INITIAL_ARGS" > "$STATEFILE"
-    chmod a+rw "$STATEFILE"
-    Is_Root && As_User && chown $USER:users "$STATEFILE"
-}
-
-Get_State ()
-{
-# first check if we have set state variable (used only internally in
-# this function) and if not, read state from file. finally return state.
-    [[ -z "${STATE:-}" && -e "$STATEFILE" ]] && STATE="$(cat $STATEFILE)"
-    echo "${STATE:-}" # this may legitimately be null
 }
 
 Debug ()
@@ -116,14 +89,28 @@ As_User ()
     ${_AS_USER:-eval} "$*"
 }
 
-#    toggle) _mode=(min max); _state=$(cat $STATEROOT/power); [[ $_state == "${_mode[0]}" ]] && power ${_mode[1]} && return; power ${_mode[0]}; exit; ;;
+Set_State ()
+{
+# takes one argument, the value of the state to be recorded
+# will correctly error exit if missing value of STATE
+# _Record_State min
+    echo -n "$INITIAL_ARGS" > "$STATEFILE"
+    chmod a+rw "$STATEFILE"
+    if Is_Root; then
+        As_User # get correct $USER value
+        chown $USER:users "$STATEFILE"
+    fi
+}
 
-#    cycle)
-#        _mode=(min max mov); _state=$(cat $STATEROOT/power); _post="power auto"
-#        for _s in $(seq 0 $((${#_mode[@]} - 1))); do 
-#            if [[ ${_state:-} == ${_mode[$_s]} ]]; then
-#                _post=; power ${_mode[$(( ++_s % ${#_mode[@]} ))]} && break;
-#            fi
-#        done
-#	eval "$_post"; return
-#        ;;
+Get_State ()
+{
+# first check if we have set state variable (used only internally in
+# this function) and if not, read state from file. finally return state.
+    [[ -z "${STATE:-}" && -e "$STATEFILE" ]] && STATE="$(cat $STATEFILE)" || true
+    echo "${STATE:-}" # this may legitimately be null
+}
+
+Remove_State ()
+{
+    if [ -e "$STATEFILE" ]; then rm "$STATEFILE"; fi
+}
