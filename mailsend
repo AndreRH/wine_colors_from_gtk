@@ -1,0 +1,9 @@
+#!/bin/bash
+
+# notification utility
+
+functions="$(dirname $(readlink -f $0))/functions"
+[ -e "$functions" ] || functions=/usr/bin/functions
+. "$functions"
+
+As_User "/home/es/bin/mailqrun > /tmp/mailsend.log"

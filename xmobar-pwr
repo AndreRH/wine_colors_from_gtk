@@ -1,2 +1,10 @@
 #!/bin/bash
-cat /var/tmp/power | tr [a-z] [A-Z]
+MODE="$(cat /var/tmp/power | tr [a-z] [A-Z])"
+case $MODE in
+    MIN) MCOLOR=#268bd2 ;;
+    MAX) MCOLOR=#d33682 ;;
+    MIV) MCOLOR=#719e07 ;;
+    MOV) MCOLOR=#6c71c4 ;;
+    *) MCOLOR=#dc322f ;;
+esac
+echo "<fc=${MCOLOR}>${MODE}</fc>"

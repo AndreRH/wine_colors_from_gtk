@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 
 #QUEUEDIR="$HOME/.msmtpqueue"
-QUEUEDIR=$MAILDATA/queue
+QUEUEDIR=$HOME/var/mail/queue
 LOCKFILE="$QUEUEDIR/.lock"
 MAXWAIT=120
 
@@ -12,6 +12,7 @@ if [ "${1:-}" == "mailqsend" ]; then
 	shift
 else
 	QUEUED=queued
+	ping -c 1 -w 2 www.google.com > /dev/null || exit
 fi
 
 OPTIONS=$@

@@ -1,0 +1,15 @@
+#!/usr/bin/env bash
+
+cd $MAILDATA/queue || exit 1
+QCOUNT=$(( $(ls | wc -l) / 2 ))
+
+if   [ $QCOUNT -gt 20 ]; then
+    echo "<fc=#dc322f>Q${COUNT}</fc>"
+elif [ $QCOUNT -gt 9 ]; then
+    echo "<fc=#268bd2>Q${COUNT}</fc>"
+elif [ $QCOUNT -gt 0 ]; then
+    echo "<fc=#268bd2>Q ${COUNT}</fc>"
+else
+    echo "<fc=#268bd2>Q 0</fc>"
+fi
+
