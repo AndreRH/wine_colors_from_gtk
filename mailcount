@@ -3,9 +3,7 @@
 COUNT=$(( $(ls -1 $HOME/var/mail/accounts/es/inbox/new | wc -l) + $(ls -1 $HOME/var/mail/accounts/es/inbox/cur | wc -l) ))
 
 if   [ $COUNT -gt 20 ]; then
-    echo "<fc=#dc322f>M${COUNT}</fc> "
-elif [ $COUNT -gt 9 ]; then
-    echo "<fc=#268bd2>M${COUNT}</fc> " || true
+    echo "<fc=#dc322f>M ${COUNT}</fc> "
 elif [ $COUNT -gt 0 ]; then
     echo "<fc=#268bd2>M ${COUNT}</fc> " || true
 else
