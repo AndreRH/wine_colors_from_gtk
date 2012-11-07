@@ -1,2 +1,2 @@
 #!/bin/bash
-sudo systemctl reload offlineimap-user.service
+sudo systemctl reload offlineimap@es.service

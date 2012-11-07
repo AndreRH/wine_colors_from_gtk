@@ -309,11 +309,23 @@ case $1 in
         ;;
 
     toggle)
+        if [ "${2:-}" == "pinned" ]; then 
+
+        _modes=(miv mov)
+        [[ "$(Get_State)" == "${_modes[0]}" ]] \
+        && power ${_modes[1]} \
+        || power ${_modes[0]}
+        QUIET_SUCCESS=true
+
+        else
+
         _modes=(min max)
         [[ "$(Get_State)" == "${_modes[0]}" ]] \
         && power ${_modes[1]} \
         || power ${_modes[0]}
         QUIET_SUCCESS=true
+
+        fi
         ;;
 
     cycle)

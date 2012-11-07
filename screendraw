@@ -1,0 +1,94 @@
+#!/bin/bash
+
+# screendraw helper script
+# annotate screen, screenshot results, upload image files if necessary
+
+# ----------------------------------------------------------------------
+# load library of common functions and set script defaults
+# ----------------------------------------------------------------------
+
+DEBUG=false
+QUIET_SUCCESS=true  # default is true
+QUIET_FAILURE=false # default is false
+
+functions="$(dirname $(readlink -f $0))/functions"
+[ -e "$functions" ] || functions=/usr/bin/functions
+. "$functions"
+
+if Is_Root && [ "${1:-}" == "recursive" ] ; then
+    warn "FAILED TO RUN $0 AS USER" && exit 1
+elif [ "${1:-}" == "restart-as-user" ]; then
+    # we're now user and have been called from root
+    shift
+elif Is_Root && [ "${1:-}" != "restart-as-user" ] ; then
+    # we're root but should be user with x env
+    As_User "screendraw restart-as-user $*"
+fi
+
+# watch out for collisions with this key binding
+# default is F9
+KEY=XF86_LaunchA # unused elsewhere, not on keyboard (script only control)
+
+# ----------------------------------------------------------------------
+# execute based on command line arguments
+# ----------------------------------------------------------------------
+
+case ${1:-} in
+    start)
+        if ! pgrep gromit-mpx; then
+            gromit-mpx --key $KEY &>/dev/null &
+            sleep 0.25
+            screendraw toggle
+            flash "screen annotation started"
+        else
+            screendraw finish
+        fi
+        ;;
+    toggle)
+        # gromit-mpx --toggle is broken, using xdotool key instead
+        xdotool key $KEY
+        ;;
+    hide)
+        xdotool key control+$KEY
+        ;;
+    clear)
+        xdotool key shift+$KEY
+        ;;
+    stop|abandon|cancel)
+        # gromit-mpx --quit is broken, using xdotool key instead
+        for pid in `pgrep gromit-mpx`; do kill -9 $pid; done
+        [ "${1:-}" == "stop" ] || flash "screen annotation cancelled"
+        ;;
+    finish)
+        pgrep gromit-mpx || exit 0
+        screendraw capture
+        screendraw hide
+        screendraw stop
+        flash "screen annotation complete"
+        screendraw upload || flash "screenshot saved"
+        ;;
+    capture)
+        mkdir -p $HOME/img/screenshots/{toupload,uploaded}
+        cd $HOME/img/screenshots/toupload
+        scrot
+        ;;
+    upload)
+	if ! ping -q -c 1 -w 2 www.google.com > /dev/null; then QUIET_FAILURE=true; exit 1; fi
+        cd $HOME/img/screenshots/toupload || exit 1
+        for _file in *; do
+            if google picasa post --src $_file --title "Screenshots"; then
+		mv $_file "$HOME/img/screenshots/uploaded"
+                flash "screenshot uploaded"
+            else
+                rm $HOME/img/screenshots/uploads.tmp
+                warn "screenshot upload failed"
+            fi
+        done
+        ;;
+    help)
+        echo "screendraw [ start | toggle | hide | clear | cancel | finish ]"
+        echo "nb: 'finish' will also upload all pending, or argument 'upload' can be used to run this step alone."
+        ;;
+    *)  screendraw start ;;
+esac
+

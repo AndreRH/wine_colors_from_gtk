@@ -540,9 +540,13 @@ case $1 in
     consolelock) QUIET_SUCCESS=true; physlock -dsu $USER; ;;
     lock) QUIET_SUCCESS=true; As_User "xscreensaver-command -lock"; ;;
     darklock) QUIET_SUCCESS=true; As_User "xset dpms force off"; As_User "xscreensaver-command -lock"; ;;
-    unlock) QUIET_SUCCESS=true; sleep 0.5; As_User "xscreensaver-command -deactivate &>/dev/null"; ;;
+    unlock) QUIET_SUCCESS=true; QUIET_FAILURE=true; sleep 0.5; As_User "xscreensaver-command -deactivate &>/dev/null"; ;;
     reset) QUIET_SUCCESS=true; Fix_Struts; ;;
     *) Help
 esac
+
+#        if [ "$(cat /sys/devices/platform/thinkpad_acpi/hotkey_tablet_mode)" -gt 0 ];
+#        then display tablet on
+#        else system off; fi
 
 Snapshot

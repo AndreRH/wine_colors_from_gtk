@@ -24,7 +24,6 @@ case $1 in
         bloop startup
         sudo wireless all restore
         power auto
-        #sudo systemctl restart offlineimap-user.service &
         ;;
 
     sleep|suspend)
@@ -40,16 +39,16 @@ case $1 in
     poweroff|off|shutdown)
         bloop shutdown
         power preshutdown
-        rmmod e1000e
-        sudo systemctl stop offlineimap-user.service
+        sudo rmmod e1000e || true
+        sudo systemctl stop offlineimap@es.service
         sudo systemctl poweroff || exit 1
         ;;
 
     reboot|restart)
         bloop shutdown
         power preshutdown
-        rmmod e1000e
-        sudo systemctl stop offlineimap-user.service
+        sudo rmmod e1000e || true
+        sudo systemctl stop offlineimap@es.service
         sudo systemctl reboot || exit 1
         ;;
 

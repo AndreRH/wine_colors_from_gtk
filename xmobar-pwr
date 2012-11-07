@@ -1,10 +1,10 @@
 #!/bin/bash
 MODE="$(cat /var/tmp/power | tr [a-z] [A-Z])"
 case $MODE in
-    MIN) FC=#719e07 BC=#073642 ;;
-    MAX) FC=#d33682 BC=#073642 ;;
-    MIV) BC=#719e07 FC=#073642 ;;
-    MOV) BC=#d33682 FC=#073642 ;;
+    MIN) FC=#719e07 BC=#073642 PAD=""  ;;
+    MAX) FC=#d33682 BC=#073642 PAD=""  ;;
+    MIV) BC=#719e07 FC=#073642 PAD=" " ;;
+    MOV) BC=#d33682 FC=#073642 PAD=" " ;;
     *) MCOLOR=#dc322f ;;
 esac
-echo "<fc=$FC,$BC> ${MODE} </fc>"
+echo "<fc=$FC,$BC>$PAD$MODE${PAD:-  }</fc>"
