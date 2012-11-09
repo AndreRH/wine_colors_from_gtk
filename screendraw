@@ -37,7 +37,7 @@ case ${1:-} in
     start)
         if ! pgrep gromit-mpx; then
             gromit-mpx --key $KEY &>/dev/null &
-            sleep 0.25
+            sleep 0.5
             screendraw toggle
             flash "screen annotation started"
         else
@@ -70,14 +70,16 @@ case ${1:-} in
     capture)
         mkdir -p $HOME/img/screenshots/{toupload,uploaded}
         cd $HOME/img/screenshots/toupload
-        scrot
+        scrot "%Y-%m-%d-%H%M%S-$HOSTNAME-$USER.png"
         ;;
     upload)
 	if ! ping -q -c 1 -w 2 www.google.com > /dev/null; then QUIET_FAILURE=true; exit 1; fi
         cd $HOME/img/screenshots/toupload || exit 1
         for _file in *; do
-            if google picasa post --src $_file --title "Screenshots"; then
+            _tag="$(echo ${_file%%.png} | sed 's/[-_ ]//g')"
+            if google picasa post --src $_file --title "Screenshots" --summary "$_tag" --tags "screenshots,linux,archlinux,$(uname -r),$_tag"; then
 		mv $_file "$HOME/img/screenshots/uploaded"
+                google picasa list --fields url-site --title "Screenshots" | tail -n1 | xclip
                 flash "screenshot uploaded"
             else
                 rm $HOME/img/screenshots/uploads.tmp

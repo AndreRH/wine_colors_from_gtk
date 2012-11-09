@@ -7,4 +7,4 @@ case $MODE in
     MOV) BC=#d33682 FC=#073642 PAD=" " ;;
     *) MCOLOR=#dc322f ;;
 esac
-echo "<fc=$FC,$BC>$PAD$MODE${PAD:-  }</fc>"
+echo "<fc=$FC,$BC>${PAD}${MODE}${PAD:-  }</fc>"

@@ -65,7 +65,21 @@ In_List ()
 
 Fix_Struts ()
 {
-    systray
+    # move systray to right hand end of xmobar
+    
+    # following sets variables that look like this:
+    # SYSTRAY_WINDOW=31457283
+    # SYSTRAY_X=800
+    # SYSTRAY_Y=800
+    # SYSTRAY_WIDTH=96
+    # SYSTRAY_HEIGHT=20
+    # SYSTRAY_SCREEN=0
+
+    eval "$(xdotool search --classname "xmobar" getwindowgeometry --shell %@ | sed "s/^/XMOBAR_/")"
+    xdotool search --classname panel windowmove $XMOBAR_WIDTH y
+
+    # if this is failing, we can revert to just a total reboot of the system tray
+    #systray
 }
 
 Cache_Xrandr ()
@@ -476,7 +490,7 @@ case $1 in
 esac
 }
 
-Simple_Cycle ()
+Simple_Toggle ()
 {
 
     Init_Internal_Display
@@ -536,12 +550,13 @@ case $1 in
     mirror) Mirror_Display ${2:-} ;;
     span) Span_Display ${2:-} ;;
     tablet) Tablet_Mode ${2:-}; ;;
-    cycle) Simple_Cycle ;;
+    toggle) Simple_Toggle ;;
     consolelock) QUIET_SUCCESS=true; physlock -dsu $USER; ;;
     lock) QUIET_SUCCESS=true; As_User "xscreensaver-command -lock"; ;;
     darklock) QUIET_SUCCESS=true; As_User "xset dpms force off"; As_User "xscreensaver-command -lock"; ;;
     unlock) QUIET_SUCCESS=true; QUIET_FAILURE=true; sleep 0.5; As_User "xscreensaver-command -deactivate &>/dev/null"; ;;
     reset) QUIET_SUCCESS=true; Fix_Struts; ;;
+    test) Fix_Struts ;;
     *) Help
 esac
 
