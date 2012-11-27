@@ -1,10 +1,16 @@
 #!/bin/bash
 
-#ALSACTRL=$ALSACTRL
-#ALSAINPT="Capture"
+if amixer | grep -q "Simple mixer control 'Master'"; then
+    ALSACTRL=Master
+    ALSAINPT="Capture"
+elif amixer | grep -q "Simple mixer control 'Speaker'"; then
+    ALSACTRL=Speaker
+    ALSAINPT="Analog In"
+else
+    ALSACTRL="$(amixer | head -n 1 | sed "s/.*'\(.*\)'.*/\1/")"
+    ALSAINPT="Capture"
+fi
 
-ALSACTRL=Speaker
-ALSAINPT="Analog In"
 
 # audio mode (pulse/alsa)
 command -v pamixer &>/dev/null && ALSA=false || ALSA=true

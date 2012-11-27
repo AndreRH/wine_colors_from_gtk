@@ -21,16 +21,16 @@ functions="$(dirname $(readlink -f $0))/functions"
 case $1 in
 
     boot)
-        bloop startup
+        #bloop startup
         sudo wireless all restore
+        display auto || true
         power auto
         ;;
 
     sleep|suspend)
-        display darklock
-        bloop shutdown
+        display darklock || true
+        bloop down
         sudo systemctl suspend || true
-        bloop startup
         display auto || true
         display unlock || true
         power auto
@@ -39,7 +39,8 @@ case $1 in
     poweroff|off|shutdown)
         bloop shutdown
         power preshutdown
-        sudo rmmod e1000e || true
+        #sudo rmmod e1000e || true
+        if ! sudo rmmod e1000e; then warn "rmmod e1000e failed" && sleep 2; fi
         sudo systemctl stop offlineimap@es.service
         sudo systemctl poweroff || exit 1
         ;;
@@ -47,7 +48,8 @@ case $1 in
     reboot|restart)
         bloop shutdown
         power preshutdown
-        sudo rmmod e1000e || true
+        #sudo rmmod e1000e || true
+        if ! sudo rmmod e1000e; then warn "rmmod e1000e failed" && sleep 2; fi
         sudo systemctl stop offlineimap@es.service
         sudo systemctl reboot || exit 1
         ;;

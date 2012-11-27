@@ -35,9 +35,10 @@ DEBUG=${DEBUG:-false} # default if not set in main script
 # _THIS_IS_A_FUNCTION_LOCAL_STATE_VARIABLE (a global used only in 1 func)
 # _this_is_a_local_temp_variable
 
-Flash () { As_User "notify-send -u low        \"$*\""; }
-Alert ()  { As_User "notify-send -u normal     \"$*\""; }
-Warn ()   { As_User "notify-send -u critical   \"$*\""; }
+Flash ()  { As_User "notify-send -u low -t 1000     \"$*\""; }
+Notify () { As_User "notify-send -u normal -t 2000 \"$*\""; }
+Alert ()  { As_User "notify-send -u normal -t 0    \"$*\""; }
+Warn ()   { As_User "notify-send -u critical -t 0  \"$*\""; }
 
 Set_Initial_Args () { INITIAL_ARGS="$*"; }
 Get_Initial_Args () { echo "${INITIAL_ARGS:-}"; }

@@ -74,12 +74,17 @@ Fix_Struts ()
     # SYSTRAY_WIDTH=96
     # SYSTRAY_HEIGHT=20
     # SYSTRAY_SCREEN=0
+    #eval "$(xdotool search --classname "xmobar" getwindowgeometry --shell %@ | sed "s/^/XMOBAR_/")"
+    #xdotool search --classname panel windowmove $XMOBAR_WIDTH y
 
-    eval "$(xdotool search --classname "xmobar" getwindowgeometry --shell %@ | sed "s/^/XMOBAR_/")"
-    xdotool search --classname panel windowmove $XMOBAR_WIDTH y
+    # just restart systray as we need to resize it as well and it's easier to have it sort this out
+    # systray
 
-    # if this is failing, we can revert to just a total reboot of the system tray
-    #systray
+    # or restart xmonad if we want to reset the prompt width. better but slightly slower
+    xmonad --restart
+
+    :
+
 }
 
 Cache_Xrandr ()
@@ -542,6 +547,71 @@ Single_Display $INTERNAL_DISPLAY
 fi
 }
 
+ScreensaverCmd ()
+{
+# $1 primary command
+# $2 secondary command
+#     # exit unless expected argument
+#     case $1 in
+#         lock|deactivate) : ;;
+#         *) return 1 ;;
+#     case
+# 
+#     if ! xscreensaver-command -${1}; then
+#         is xscreensaver running?
+#         if so, ok else start it up
+#         else secondary action if present as $2
+#     else
+:
+}
+
+ScreensaverLock ()
+{
+    TMPFILE=$(mktemp)
+
+    # kickstart xscreensaver if it isn't already running
+    if ! pgrep xscreensaver &>/dev/null; then
+        As_User "/usr/bin/xscreensaver -no-splash -no-capture-stderr &"
+    fi
+
+    if ! As_User "xscreensaver-command -lock &> $TMPFILE"; then
+        # failed lock, check if we are *already* locked
+        if grep -q "already locked" $TMPFILE; then
+            # already locked, all ok
+            RET=0
+        else
+            # unknown failure, not ok
+            Warn "Unknown failure trying to lock screensaver"
+            RET=1
+        fi
+    fi
+
+    rm $TMPFILE
+    return ${RET:-0}
+}
+
+ScreensaverUnlock ()
+{
+# makes sure that xscreensaver is actually running first
+    TMPFILE=$(mktemp)
+
+    #sleep 0.5
+
+    # kickstart xscreensaver if it isn't already running
+    if ! pgrep xscreensaver &>/dev/null; then
+        As_User "/usr/bin/xscreensaver -no-splash -no-capture-stderr &"
+    fi
+
+    if ! As_User "xscreensaver-command -deactivate &> $TMPFILE"; then
+            Warn "Unknown failure trying to unlock screensaver"
+            RET=1
+    fi
+
+    rm $TMPFILE
+    return ${RET:-0}
+}
+
+
 case $1 in
     auto) Make_Safe ;;
     record) notify-send -u critical "RECORD CALLED" ;;
@@ -549,12 +619,12 @@ case $1 in
     internal) Internal_Display ;;
     mirror) Mirror_Display ${2:-} ;;
     span) Span_Display ${2:-} ;;
-    tablet) Tablet_Mode ${2:-}; ;;
+    tablet) Tablet_Mode ${2:-} ;;
     toggle) Simple_Toggle ;;
-    consolelock) QUIET_SUCCESS=true; physlock -dsu $USER; ;;
-    lock) QUIET_SUCCESS=true; As_User "xscreensaver-command -lock"; ;;
-    darklock) QUIET_SUCCESS=true; As_User "xset dpms force off"; As_User "xscreensaver-command -lock"; ;;
-    unlock) QUIET_SUCCESS=true; QUIET_FAILURE=true; sleep 0.5; As_User "xscreensaver-command -deactivate &>/dev/null"; ;;
+    consolelock) QUIET_SUCCESS=true; physlock -dsu $USER ;;
+    lock) QUIET_SUCCESS=true; ScreensaverLock ;;
+    darklock) QUIET_SUCCESS=true; As_User "xset dpms force off"; ScreensaverLock ;;
+    unlock) QUIET_SUCCESS=true; QUIET_FAILURE=true; ScreensaverUnlock ;;
     reset) QUIET_SUCCESS=true; Fix_Struts; ;;
     test) Fix_Struts ;;
     *) Help
