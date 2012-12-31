@@ -23,16 +23,17 @@ case $1 in
     boot)
         #bloop startup
         sudo wireless all restore
-        display auto || true
+        displays auto || true
         power auto
+        trackpad restore
         ;;
 
     sleep|suspend)
-        display darklock || true
+        displays darklock || true
         bloop down
         sudo systemctl suspend || true
-        display auto || true
-        display unlock || true
+        displays auto || true
+        displays unlock || true
         power auto
         ;;
 

@@ -10,7 +10,7 @@
 # expects function file in same directory as script (or script target)
 
 DEBUG=true
-QUIET_SUCCESS=false
+QUIET_SUCCESS=false # QUIET_SUCCESS true if no dbus notification wanted
 functions="$(dirname $(readlink -f $0))/functions"
 [ -e "$functions" ] || functions=/usr/bin/functions
 . "$functions"
@@ -18,8 +18,14 @@ functions="$(dirname $(readlink -f $0))/functions"
 # ----------------------------------------------------------------------
 # Run as user, not root
 # ----------------------------------------------------------------------
+# this script is currently called by user owned processes such as
+# xmonad or even via the command line, but in cases where I might
+# want to run it from, for example, the system acpi handler, I need
+# to run as the user (i.e. get current X environment). The "Is_Root" and
+# "As_User" functions assist with this.
+
 if Is_Root && [[ "${1:-}" != "recursive" ]] ; then
-    As_User "display recursive $*"
+    As_User "displays recursive $*"
     QUIET_SUCCESS=true
     exit
 elif [[ "${1:-}" == "recursive" ]] && ! Is_Root; then
@@ -40,7 +46,7 @@ fi
 
 Help ()
 {
-    echo -n "display internal | external | mirror [internal|external] "
+    echo -n "displays internal | external | mirror [internal|external] "
     echo "| span [internal|external] | cycle";
     QUIET_SUCCESS=true; exit
 }
@@ -53,7 +59,6 @@ Help ()
 PREFERRED_INTERNAL_DISPLAY_PREFIXES="LVDS DP HDMI VGA"
 PREFERRED_EXTERNAL_DISPLAY_PREFIXES="DP HDMI VGA"
 
-
 # ---------------------------------------------------------------------
 # General helper functions
 # ---------------------------------------------------------------------
@@ -65,6 +70,7 @@ In_List ()
 
 Fix_Struts ()
 {
+
     # move systray to right hand end of xmobar
     
     # following sets variables that look like this:
@@ -81,7 +87,12 @@ Fix_Struts ()
     # systray
 
     # or restart xmonad if we want to reset the prompt width. better but slightly slower
-    xmonad --restart
+    # asking xmonad to restart via a faked keypress vs command line does *not* have the same result
+    # here. cmd line version results in broken screen redraw and requires a subsequent wkspace change
+    # or another restart. sending the restart key combination (restart, not rebuild in my mapping)
+    # results in a good restart and clean screen redrawing.
+    # xmonad --restart
+    xdotool key alt+q
 
     :
 
@@ -280,7 +291,7 @@ Mirror_Display ()
     # -----------------------------------------------------------------
     [[ -z "$EXTERNAL_DISPLAY" ]] && return 1
 
-    # calling this script in the format "display mirror internal"
+    # calling this script in the format "displays mirror internal"
     # anchors the mirror to the internal display,
     # and scaling the external display to match the internal, rather
     # than the default state of scaling to the external display
@@ -524,6 +535,7 @@ Matches_Snapshot ()
 
 Make_Safe ()
 {
+# if we don't match the snapshot (e.g. on resume) revert to safe display state
     Init_Internal_Display
     Matches_Snapshot || Single_Display $INTERNAL_DISPLAY
 }
@@ -614,6 +626,7 @@ ScreensaverUnlock ()
 
 case $1 in
     auto) Make_Safe ;;
+    makesafe) Make_Safe ;;
     record) notify-send -u critical "RECORD CALLED" ;;
     external) External_Display ;;
     internal) Internal_Display ;;
@@ -634,4 +647,5 @@ esac
 #        then display tablet on
 #        else system off; fi
 
+xset -dpms # let's make sure that we're not using dpms DEBUG TODO
 Snapshot

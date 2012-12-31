@@ -41,9 +41,10 @@ case $1 in
     view)
         cat $CALDIR/$CALFILE
         HOURS_SINCE_UPDATE=$(((`date --utc +%s`-`date --utc --reference=$CALDIR/$CALFILE +%s`)/60/60))
-        if [ "$HOURS_SINCE_UPDATE" -gt "0" ]
-        then
+        if [ "$HOURS_SINCE_UPDATE" -gt "1" ]; then
             echo -n "$HOURS_SINCE_UPDATE hours since last update "
+        elif [ "$HOURS_SINCE_UPDATE" -gt "0" ]; then
+            echo -n "$HOURS_SINCE_UPDATE hour since last update "
         fi
         sleep 30
     ;;

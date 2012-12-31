@@ -1,6 +1,16 @@
 #!/bin/bash
 
+Trayer ()
+{
 pacman -Q trayer-srg-git &>/dev/null && SRGCMD="--monitor primary"
-
 ps -A | grep -q "trayer" && killall trayer
-trayer --edge top --align right --SetDockType true --SetPartialStrut true --expand true --widthtype percent --width 7 --transparent true --tint 0x073642 --alpha 0 --margin 1 --height 20 ${SRGCMD:-} &
+trayer --edge top --align right --SetDockType true --SetPartialStrut true --expand false --widthtype percent --width 7 --transparent true --tint 0x073642 --alpha 0 --margin 1 --height 20 ${SRGCMD:-} &
+}
+
+Stalonetray () 
+{
+for p in $(pgrep stalonetray); do kill -9 $p; done
+stalonetray --background "#073642" --icon-size 16 --slot-size 20 --sticky --window-strut auto --window-type toolbar --geometry 7x1-0+0 --icon-gravity NE & # --kludges fix_window_pos --dockapp-mode simple 
+}
+
+Stalonetray

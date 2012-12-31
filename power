@@ -56,7 +56,7 @@ Display_Powersave ()
     # function settings -----------------------------------------------
 
     _VIDEOPATH=/sys/class/backlight/acpi_video0
-    _SKIP_i915=true
+    _SKIP_i915=false
 
     # set brightness --------------------------------------------------
 
@@ -85,8 +85,32 @@ Display_Powersave ()
     #TODO: xscreensaver should probably handle this
     #and should probably set/reset xscreensaver settings here
 
-    [ -n "${dpms_seconds:-}" ] \
-    && As_User "xset dpms 0 0 $dpms_seconds &>/dev/null"
+    # this is the original I was using without xscreensaver
+    # which I'm now replacing with the dedicated Display_Timeout func
+    # [ -n "${dpms_seconds:-}" ] \
+    # && As_User "xset dpms 0 0 $dpms_seconds &>/dev/null"
+
+}
+
+Screensaver_Restart ()
+{
+    # restart or start depending on current xscreensaver state
+    if pgrep xscreensaver &>/dev/null; then
+        As_User "/usr/bin/xscreensaver-command -restart &>/dev/null"
+    else
+        As_User "/usr/bin/xscreensaver -no-splash -no-capture-stderr &"
+    fi
+}
+
+Display_Timeout ()
+{
+# fast | slow | none
+
+    case $1 in
+        fast) As_User "rm ~/.xscreensaver; ln -s ~/etc/xorg/xscreensaver-fast ~/.xscreensaver"; Screensaver_Restart ;;
+        slow) As_User "rm ~/.xscreensaver; ln -s ~/etc/xorg/xscreensaver-slow ~/.xscreensaver"; Screensaver_Restart ;;
+        none) As_User "rm ~/.xscreensaver; ln -s ~/etc/xorg/xscreensaver-none ~/.xscreensaver"; Screensaver_Restart ;;
+    esac
 
 }
 
@@ -311,11 +335,17 @@ case $1 in
     toggle)
         if [ "${2:-}" == "pinned" ]; then 
 
-        _modes=(miv mov)
-        [[ "$(Get_State)" == "${_modes[0]}" ]] \
-        && power ${_modes[1]} \
-        || power ${_modes[0]}
-        QUIET_SUCCESS=true
+            if [[ "$(Get_State)" == "min" ]]; then
+                power miv
+            elif [[ "$(Get_State)" == "max" ]]; then
+                power mov
+            else
+                _modes=(miv mov)
+                [[ "$(Get_State)" == "${_modes[0]}" ]] \
+                && power ${_modes[1]} \
+                || power ${_modes[0]}
+            fi
+            QUIET_SUCCESS=true
 
         else
 
@@ -346,6 +376,7 @@ case $1 in
         CPU_Powersave on
         Disk_Powersave on
         Display_Powersave on
+        Display_Timeout fast
         Soundcard_Powersave on
         Wifi_Powersave on
         #[ "${2:-}" == "silent" ] && INITIAL_ARGS="$1"
@@ -357,6 +388,7 @@ case $1 in
         CPU_Powersave on
         Disk_Powersave off
         Display_Powersave on
+        Display_Timeout slow
         Soundcard_Powersave on
         Wifi_Powersave on
         [ "${2:-}" == "silent" ] && INITIAL_ARGS="$1"
@@ -368,7 +400,8 @@ case $1 in
         Bus_ASPM_Wacom_Powersave on on on
         CPU_Powersave on
         Disk_Powersave on
-        Display_Powersave off
+        Display_Powersave on
+        Display_Timeout none
         Soundcard_Powersave on
         Wifi_Powersave on
         [ "${2:-}" == "silent" ] && INITIAL_ARGS="$1"
@@ -382,6 +415,7 @@ case $1 in
         CPU_Powersave off
         Disk_Powersave off
         Display_Powersave off
+        Display_Timeout slow
         Soundcard_Powersave off
         Wifi_Powersave off
         [ "${2:-}" == "silent" ] && INITIAL_ARGS="$1"
@@ -393,6 +427,7 @@ case $1 in
         CPU_Powersave off
         Disk_Powersave off
         Display_Powersave off
+        Display_Timeout none
         Soundcard_Powersave off
         Wifi_Powersave off
         [ "${2:-}" == "silent" ] && INITIAL_ARGS="$1"
