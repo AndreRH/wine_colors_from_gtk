@@ -1,4 +1,4 @@
 #!/bin/bash
 # equivalent to below echo -e ""
-echo -e "\a"
+sleep 4; echo -e "\a"
 

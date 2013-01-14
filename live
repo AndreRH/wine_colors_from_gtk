@@ -1,0 +1,173 @@
+#!/bin/bash
+
+STATEFILE=/tmp/livewallpaper
+
+#xwinwrap -b -fs -sp -fs -nf -ov  -- /usr/lib/xscreensaver/glschool -no-drawbbox -root -window-id WID &
+#xwinwrap -b -fs -sp -fs -nf -ov  -- /usr/lib/xscreensaver/interaggregate -foreground "#073642" -background "#002b36" -num-circle 10 -growth-delay 50000 -root -window-id WID &
+#xwinwrap -b -fs -sp -fs -nf -ov  -- /usr/lib/xscreensaver/penetrate -foreground "#586e75" -background "#002b36" -bgrowth 3000 -lrate 100 -root -window-id WID &
+#xwinwrap -b -fs -sp -fs -nf -ov  -- /usr/lib/xscreensaver/petri -foreground "#586e75" -background "#002b36" -root -window-id WID &
+
+for processname in xwinwrap deco intermomentary glschool goop noof piecewise rocks spheremonics popsquares surfaces xrayswarm glmatrix; do
+  for id in $(pgrep $processname); do kill -9 $id; done
+done
+
+case $1 in
+
+  inter)
+    xwinwrap -g 0x0+0+20 -b -nf -st -sp -fs -nf -ov  -- \
+    /usr/lib/xscreensaver/intermomentary \
+    -foreground "#586e75" \
+    -background "#002b36" \
+    -num-discs 150 \
+    -draw-delay 50000 \
+    -root \
+    -window-id WID &
+    ;;
+
+  deco)
+    xwinwrap -g 0x0+0+20 -b -nf -st -sp -fs -nf -ov  -- \
+    /usr/lib/xscreensaver/deco \
+    -fg "#073642" \
+    -bg "#002b36" \
+    -delay 10 \
+    -smooth-colors \
+    -golden-ratio \
+    -root \
+    -window-id WID &
+    ;;
+
+  fish)
+    xwinwrap -g 0x0+0+20 -b -nf -st -sp -fs -nf -ov  -- \
+    /usr/lib/xscreensaver/glschool \
+    -no-drawbbox \
+    -root -window-id WID &
+    ;;
+
+  blobs)
+    xwinwrap -g 0x0+0+20 -b -nf -st -sp -fs -nf -ov  -- \
+    /usr/lib/xscreensaver/goop \
+    -fg "#073642" \
+    -bg "#002b36" \
+    -xor \
+    -root \
+    -window-id WID &
+    ;;
+
+  noof)
+    xwinwrap -g 0x0+0+20 -b -nf -st -sp -fs -nf -ov  -- \
+    /usr/lib/xscreensaver/noof \
+    -fg "#073642" \
+    -bg "#002b36" \
+    -delay 20000 \
+    -root \
+    -window-id WID &
+    ;;
+
+  circles)
+    xwinwrap -g 0x0+0+20 -b -nf -st -sp -fs -nf -ov  -- \
+    /usr/lib/xscreensaver/piecewise \
+    -fg "#586e75" \
+    -fg "#073642" \
+    -bg "#002b36" \
+    -mono \
+    -delay 50000 \
+    -root \
+    -window-id WID &
+    ;;
+
+  rocks)
+    xwinwrap -g 0x0+0+20 -o 1.00 -b -nf -st -sp -fs -nf -ov  -- \
+    /usr/lib/xscreensaver/rocks \
+    -fg "#586e75" \
+    -fg "#073642" \
+    -bg "#002b36" \
+    -colors 3 \
+    -mono \
+    -root \
+    -window-id WID &
+    ;;
+
+  sphere)
+    xwinwrap -g 0x0+0+20 -o 1.00 -b -nf -st -sp -fs -nf -ov  -- \
+    /usr/lib/xscreensaver/spheremonics \
+    -fg "#586e75" \
+    -bg "#002b36" \
+    -wireframe \
+    -wander \
+    -resolution 25 \
+    -delay 40000 \
+    -root \
+    -window-id WID &
+    ;;
+
+  surfaces)
+    xwinwrap -g 0x0+0+20 -o 1.00 -b -nf -st -sp -fs -nf -ov  -- \
+    /usr/lib/xscreensaver/surfaces \
+    -fg "#586e75" \
+    -bg "#002b36" \
+    -line-loops \
+    -mode points \
+    -delay 30000 \
+    -corkscrew \
+    -root \
+    -window-id WID &
+#   -catalan \
+    ;;
+
+  swarm)
+    xwinwrap -g 0x0+0+20 -o 1.00 -b -nf -st -sp -fs -nf -ov  -- \
+    /usr/lib/xscreensaver/xrayswarm \
+    -fg "#586e75" \
+    -bg "#002b36" \
+    -root \
+    -window-id WID &
+    ;;
+
+  matrix)
+    xwinwrap -g 0x0+0+20 -o 0.25 -b -nf -st -sp -fs -nf -ov  -- \
+    /usr/lib/xscreensaver/glmatrix \
+    -fg "#586e75" \
+    -bg "#002b36" \
+    -no-rotate \
+    -speed 0.2 \
+    -root \
+    -window-id WID &
+    ;;
+
+  rects)
+    xwinwrap -g 0x0+0+21 -o 1.00 -b -nf -st -sp -fs -nf -ov  -- \
+    /usr/lib/xscreensaver/popsquares \
+    -fg "#073642" \
+    -bg "#002b36" \
+    -subdivision 10 \
+    -border 1 \
+    -delay 250000 \
+    -root \
+    -window-id WID &
+    ;;
+
+  rects2)
+    xwinwrap -g 0x0+0+20 -o 1.00 -b -nf -st -sp -fs -nf -ov  -- \
+    /usr/lib/xscreensaver/popsquares \
+    -fg "#073642" \
+    -bg "#002b36" \
+    -subdivision 3 \
+    -border 0 \
+    -delay 250000 \
+    -root \
+    -window-id WID &
+    ;;
+
+  *)
+    if [ -f "$STATEFILE" ]; then
+      STATEVAL="$(cat $STATEFILE)"
+      eval "/home/es/bin/live $STATEVAL"
+    else
+      STATEVAL=circles
+      /home/es/bin/live circles
+    fi
+    ;;
+
+esac
+
+[ $? -eq 0 ] && echo "${1-$STATEVAL}" > "$STATEFILE"
