@@ -1,16 +1,59 @@
 #!/bin/bash
 
-Trayer ()
+init_trayer ()
 {
-pacman -Q trayer-srg-git &>/dev/null && SRGCMD="--monitor primary"
-ps -A | grep -q "trayer" && killall trayer
-trayer --edge top --align right --SetDockType true --SetPartialStrut true --expand false --widthtype percent --width 7 --transparent true --tint 0x073642 --alpha 0 --margin 1 --height 20 ${SRGCMD:-} &
+# if running, kill it, init either way
+
+    for pid in $(pgrep trayer); do kill -9 $pid; done 
+
+    trayer \
+        --edge top \
+        --align right \
+        --SetDockType true \
+        --SetPartialStrut true \
+        --expand false \
+        --widthtype percent \
+        --width 6 \
+        --tint 0x073642 \
+        --transparent true \
+        --alpha 100 \
+        --margin 0 \
+        --padding 0 \
+        --heighttype pixel \
+        --height 20 &
+
 }
 
-Stalonetray () 
+init_stalonetray () 
 {
-for p in $(pgrep stalonetray); do kill -9 $p; done
-stalonetray --background "#073642" --icon-size 16 --slot-size 20 --sticky --window-strut auto --window-type toolbar --geometry 7x1-0+0 --icon-gravity NE & # --kludges fix_window_pos --dockapp-mode simple 
+# if running, move it, else run it
+
+if pgrep stalonetray &>/dev/null; then
+
+    eval "$(xdotool search --classname stalonetray getwindowgeometry --shell $@ | grep WIDTH)"
+
+    YPOS=$(( $(xdpyinfo | grep -m 1 dimensions | sed "s/[^[:digit:]]*\([[:digit:]]*\).*/\1/") - $WIDTH ))
+
+    xdotool search --classname stalonetray windowmove $YPOS 0
+
+else
+
+    stalonetray \
+        --dockapp-mode none \
+        --background '#073642' \
+        --icon-size 18 \
+        --slot-size 20 \
+        --sticky \
+        --window-strut auto \
+        --window-type dock \
+        --geometry 6x1-1+0 \
+        --max-geometry 6x1 \
+        --icon-gravity W \
+        --grow-gravity W \
+        --kludges fix_window_pos,force_icons_size \
+        --window-layer bottom &
+
+fi
 }
 
-Stalonetray
+init_stalonetray
