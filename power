@@ -65,7 +65,8 @@ Display_Powersave ()
     new_brightness=$(((${backlight_percent}*${full_brightness})/100))
     [[ $current_brightness -gt $new_brightness ]] && _sign="-"
     for _b in $(seq $current_brightness ${_sign:-}1 $new_brightness)
-    do echo -n $_b > $_VIDEOPATH/brightness; sleep 0.015; done
+    do echo -n $_b > $_VIDEOPATH/brightness \
+    || Warn "BRIGHTNESS SET FAILURE"; sleep 0.015; done
 
     # driver power management (may skip) ------------------------------
 
@@ -75,8 +76,11 @@ Display_Powersave ()
         for _param in i915_enable_rc6 i915_enable_fbc; do
             _param_value_varname="${_param:$((${#_param}-4)):4}"
             _param_value=${!_param_value_varname}
-            [ "$(stat --format "%a" "${_path}${_param}")" -ge 600 ] \
-            && echo -n $_param_value > "${_path}${_param}"
+            if [ "$(stat --format "%a" "${_path}${_param}")" -ge 600 ];
+            then
+                 echo -n $_param_value > "${_path}${_param}" \
+                 || Warn "DISPLAY POWER MGMT SET FAILURE"
+            fi
         done
     fi
 
@@ -96,9 +100,12 @@ Screensaver_Restart ()
 {
     # restart or start depending on current xscreensaver state
     if pgrep xscreensaver &>/dev/null; then
-        As_User "/usr/bin/xscreensaver-command -restart &>/dev/null"
+        # As_User "/usr/bin/xscreensaver-command -restart &>/dev/null"
+        # skipping this - TODO: decide if I need to fix this
+        :
     else
-        As_User "/usr/bin/xscreensaver -no-splash -no-capture-stderr &"
+        As_User "/usr/bin/xscreensaver -no-splash -no-capture-stderr &" \
+        || Warn "XSCREENSAVER START FAILURE - SCREENSAVER NOT RUNNING"
     fi
 }
 
@@ -372,13 +379,13 @@ case $1 in
         ;;
 
     min)
-        Bus_ASPM_Wacom_Powersave on on on
-        CPU_Powersave on
-        Disk_Powersave on
-        Display_Powersave on
-        Display_Timeout fast
-        Soundcard_Powersave on
-        Wifi_Powersave on
+        Bus_ASPM_Wacom_Powersave on on on || warn "BUS ASPM POWERSAVE FAILED"
+        CPU_Powersave on || warn "CPU POWERSAVE FAILED"
+        Disk_Powersave on || warn "DISK POWERSAVE FAILED"
+        Display_Powersave on || warn "DISPLAY POWERSAVE FAILED"
+        Display_Timeout fast || warn "DISPLAY TIMEOUT SET FAILED"
+        Soundcard_Powersave on || warn "SOUNDCARD POWERSAVE FAILED"
+        Wifi_Powersave on || warn "WIFI POWERSAVE FAILED"
         #[ "${2:-}" == "silent" ] && INITIAL_ARGS="$1"
         Set_State
         ;;

@@ -512,9 +512,11 @@ Simple_Toggle ()
     Init_Internal_Display
     Init_External_Display
     Init_Active_Displays
+    Init_Connected_Displays
 
     if In_List "$ACTIVE_DISPLAYS" "$INTERNAL_DISPLAY"; then
-        Single_Display $EXTERNAL_DISPLAY
+        # try external, if fails then set internal again
+        Single_Display $EXTERNAL_DISPLAY || Single_Display $INTERNAL_DISPLAY
     else
         Single_Display $INTERNAL_DISPLAY
     fi

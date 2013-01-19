@@ -1,2 +1,3 @@
 #!/bin/bash
 sudo systemctl restart net-auto-wireless.service
+sudo systemctl restart offlineimap@es.service

@@ -41,14 +41,14 @@ else
     stalonetray \
         --dockapp-mode none \
         --background '#073642' \
-        --icon-size 18 \
+        --icon-size 16 \
         --slot-size 20 \
         --sticky \
         --window-strut auto \
         --window-type dock \
-        --geometry 6x1-1+0 \
-        --max-geometry 6x1 \
-        --icon-gravity W \
+        --geometry 7x1-1+0 \
+        --max-geometry 10x1 \
+        --icon-gravity E \
         --grow-gravity W \
         --kludges fix_window_pos,force_icons_size \
         --window-layer bottom &

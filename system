@@ -8,7 +8,7 @@
 # handles both symlinked and original script
 # expects function file in same directory as script (or script target)
 
-QUIET_SUCCESS=false
+QUIET_SUCCESS=true
 DEBUG=true
 functions="$(dirname $(readlink -f $0))/functions"
 [ -e "$functions" ] || functions=/usr/bin/functions
@@ -35,6 +35,7 @@ case $1 in
         displays auto || true
         displays unlock || true
         power auto
+        restart-offlineimap
         ;;
 
     poweroff|off|shutdown)
