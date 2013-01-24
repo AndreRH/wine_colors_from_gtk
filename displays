@@ -613,6 +613,8 @@ ScreensaverUnlock ()
 
     # kickstart xscreensaver if it isn't already running
     if ! pgrep xscreensaver &>/dev/null; then
+        Alert "STARTING SCREENSAVER POST SCREEN UNLOCK"
+        alert "STARTING SCREENSAVER POST SCREEN UNLOCK"
         As_User "/usr/bin/xscreensaver -no-splash -no-capture-stderr &"
     fi
 

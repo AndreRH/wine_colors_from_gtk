@@ -1,6 +1,6 @@
 #!/bin/bash
 
-COUNT=$(( $(ls -1 $HOME/var/mail/accounts/es/inbox/new | wc -l) + $(ls -1 $HOME/var/mail/accounts/es/inbox/cur | wc -l) ))
+COUNT=$(( $(ls -1 $HOME/var/mail/accounts/es/INBOX/new | wc -l) + $(ls -1 $HOME/var/mail/accounts/es/INBOX/cur | wc -l) ))
 
 if   [ $COUNT -gt 20 ]; then
     echo "<fc=#dc322f>M ${COUNT}</fc> "

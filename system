@@ -35,7 +35,7 @@ case $1 in
         displays auto || true
         displays unlock || true
         power auto
-        restart-offlineimap
+        mail-restart
         ;;
 
     poweroff|off|shutdown)
