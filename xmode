@@ -1,0 +1,144 @@
+#!/bin/bash
+
+# xmonad oriented minimal desktop environment
+# Ethan Schoonover
+# es@ethanschoonover.com
+
+
+# TODO: allow for hard and soft restarts
+
+# usage:
+# soft start/restart: xmode
+# hard start/restart: xmode -hard
+
+
+killprocess () { for pid in $(pgrep $1); do kill -9 $pid; done; }
+
+# ----------------------------------------------------------------------
+# System Tray
+# ----------------------------------------------------------------------
+
+trayer ()
+{
+    killprocess trayer # if running, kill it, init either way
+    trayer \
+        --edge top \
+        --align right \
+        --SetDockType true \
+        --SetPartialStrut true \
+        --expand false \
+        --widthtype percent \
+        --width 6 \
+        --tint 0x073642 \
+        --transparent true \
+        --alpha 100 \
+        --margin 0 \
+        --padding 0 \
+        --heighttype pixel \
+        --height 20 &
+}
+
+systemtray () 
+{
+# if running, move it, else run it
+if pgrep stalonetray &>/dev/null; then
+    eval "$(xdotool search --classname stalonetray getwindowgeometry --shell $@ | grep WIDTH)"
+    YPOS=$(( $(xdpyinfo | grep -m 1 dimensions | sed "s/[^[:digit:]]*\([[:digit:]]*\).*/\1/") - $WIDTH ))
+    xdotool search --classname stalonetray windowmove $YPOS 0
+    xdotool search --classname stalonetray windowsize $WIDTH 18 
+else
+    stalonetray \
+        --dockapp-mode none \
+        --background '#073642' \
+        --icon-size 15 \
+        --slot-size 18 \
+        --sticky \
+        --window-strut auto \
+        --window-type dock \
+        --geometry 7x1-1+0 \
+        --max-geometry 10x1 \
+        --icon-gravity E \
+        --grow-gravity W \
+        --kludges fix_window_pos,force_icons_size \
+        --window-layer bottom &
+fi
+}
+
+# ----------------------------------------------------------------------
+# Window Compositing
+# ----------------------------------------------------------------------
+
+compositing ()
+{
+    pgrep compton || \
+    compton -f -D 6 -m 0.95 -cCGz \
+    --unredir-if-possible \
+    --detect-transient \
+    --detect-client-leader \
+    --paint-on-overlay &
+    # --vsync drm \ #NOTE: was using this but it's generating errors
+    # --blur-background-fixed"
+    # --use-ewmh-active-win"
+    # xcompmgr -f -D 6" "cairo-compmgr"
+}
+
+notifier () {
+    pgrep dunst || dunst &
+}
+
+statusbar ()
+{
+    #pgrep xmobar || xmobar ~/etc/xorg/.xmobarrc-minimal &
+    pgrep xmobar || xmobar ~/etc/xorg/.xmobarrc-minimal &
+}
+
+audiotray ()
+{
+    pgrep pasystray || pasystray &
+}
+
+screensaver ()
+{
+    pgrep xscreensaver || /usr/bin/xscreensaver -no-splash -no-capture-stderr &
+}
+
+filemanager ()
+{
+    pgrep spacefm || spacefm -d &
+}
+
+dropbox ()
+{
+    pgrep dropbox || dropboxd &
+}
+
+wiki ()
+{
+    pgrep zim || zim --plugin trayicon &>/dev/null &
+}
+
+wallpaper ()
+{
+    ~/bin/live surfaces &>/dev/null &
+}
+
+terminal ()
+{
+    pgrep urxvtd || urxvtd -f -o -q &
+}
+
+
+sleep 0.5
+systemtray 
+compositing 
+notifier 
+statusbar 
+audiotray 
+screensaver 
+filemanager 
+dropbox 
+wiki 
+#wallpaper 
+terminal
+bloop up
+

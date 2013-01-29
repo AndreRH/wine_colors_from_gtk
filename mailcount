@@ -1,6 +1,7 @@
 #!/bin/bash
 
-COUNT=$(( $(ls -1 $HOME/var/mail/accounts/es/INBOX/new | wc -l) + $(ls -1 $HOME/var/mail/accounts/es/INBOX/cur | wc -l) ))
+#COUNT=$(( $(ls -1 $HOME/var/mail/accounts/es/INBOX/new | wc -l) + $(ls -1 $HOME/var/mail/accounts/es/INBOX/cur | wc -l) ))
+COUNT=$(notmuch count tag:INBOX NOT is:spam NOT is:trash)
 
 if   [ $COUNT -gt 20 ]; then
     echo "<fc=#dc322f>M ${COUNT}</fc> "

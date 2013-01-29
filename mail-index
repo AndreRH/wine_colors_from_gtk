@@ -1,0 +1,83 @@
+#!/bin/bash
+
+# ----------------------------------------------------------------------
+# mail-index - sync mail folder to mail tags
+# es@ethanschoonover.com / Ethan Schoonover
+# ----------------------------------------------------------------------
+# summary:
+#
+# this script is designed to mimic gmail style tagging of messages
+# for use with mutt-kz (a mutt fork integrating notmuch mail indexing)
+# 
+# a message may exist in multiple maildir directories (mailboxes).
+# this script tags each message with the name of each maildir it is in.
+# combined with the mutt-kz virtual folders in mutt, this allows us to
+# see incoming mail tagged just as it is in the gmail interface.
+#
+# note that in this model I'm using gmail filters to preprocess, though
+# this works even without doing that on any existing mail.
+#
+# a note on filing mail: I generally don't tag mail, I file it. this
+# script is designed such that, if you wish to tag mail with other
+# "labels", you do so by actually moving/copying the message to real
+# mailboxes using mutt move/copy commands. after this is done, running
+# this script again (either manually or automatically on maildir change)
+# will sync up those "physical" location changes with the notmuch tags.
+# 
+# ----------------------------------------------------------------------
+# how to initiate a mail index using this script
+#
+# - manually via command line
+# - as a postsynchook in offlineimap
+# - via inotify / systemd on maildir directory tree / inbox file changes
+#
+# ----------------------------------------------------------------------
+
+# ----------------------------------------------------------------------
+# check initial argument for --dry-run (or -d) or --help (or -h)
+# --dry-run (-d) makes no changes and simply echos what will be done
+# ----------------------------------------------------------------------
+case $1 in
+    *-d*) RUNCMD=echo; echo "DRYRUN - no changes will be made"; ;;
+    *-h*) echo "usage: mail-index [--dry-run]"; exit; ;;
+    *) RUNCMD=eval; ;;
+esac
+
+# ----------------------------------------------------------------------
+# index new mail
+# note that depending on how you've set up notmuch, this may or may not
+# apply default tags to new mail. if that's the case, you might want to
+# subsequently remove or change them later
+# ----------------------------------------------------------------------
+
+# if notmuch new returns an error because it is in progress,
+# sleep and wait until it is complete (max X tries)
+
+#$RUNCMD "notmuch new"
+COUNT=0
+MAXTRIES=5
+while ! notmuch new 2>/dev/null && [[ $COUNT < $MAXTRIES ]]; do
+    echo -e "\nnotmuch is busy, waiting...\n";
+    let COUNT=$(( $COUNT + 1 ));
+    sleep 1;
+done
+
+# ----------------------------------------------------------------------
+# get list of mailboxes using the mboxes file output by offlineimap
+# ----------------------------------------------------------------------
+MAILBOXES=$(sed 's/[^"]*"+\([^"]*\)"/\1\n/g' ~/var/mail/mailboxes)
+
+# ----------------------------------------------------------------------
+# add tags to each folder matching folder name (IMAP path trimmed)
+# remove tags for messages that have been removed
+# ----------------------------------------------------------------------
+for MAILBOX in $MAILBOXES; do
+    MAILTAG=${MAILBOX##*/} # trim to last path component
+    $RUNCMD "notmuch tag -$MAILTAG -- tag:$MAILTAG NOT folder:$MAILBOX NOT folder:trash"
+    $RUNCMD "notmuch tag +$MAILTAG -- folder:$MAILBOX NOT tag:$MAILTAG"
+done
+
+# ----------------------------------------------------------------------
+# anything in sent mail should have the unread flag removed
+# ----------------------------------------------------------------------
+$RUNCMD "notmuch tag -unread -- folder:sent"

@@ -1,0 +1,18 @@
+#!/bin/bash
+
+SPOTIFY_NAME="Spotify Premium - Linux Preview"
+NAME_PREFIX="WM_ICON_NAME(COMPOUND_TEXT)"
+SEP=" – "
+
+Flash ()   { notify-send -u low -t 1000 "$*"; }
+SendKey () { xdotool search --name "$SPOTIFY_NAME" key --window %@ $1; }
+
+case $1 in
+    play|pause) SendKey XF86AudioPlay ;;
+    next)       SendKey XF86AudioNext ;;
+    prev)       SendKey XF86AudioPrev ;;
+esac
+
+TRACK="$(xprop -name "$SPOTIFY_NAME" | grep "$NAME_PREFIX" | sed 's/.*Spotify - \([^"]*\)".*/\1/' | sed "s/$SEP/ - /")"
+[[ -n "$TRACK" ]] && Flash "$TRACK"
+

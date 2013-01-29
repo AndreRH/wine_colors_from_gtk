@@ -92,7 +92,10 @@ Fix_Struts ()
     # or another restart. sending the restart key combination (restart, not rebuild in my mapping)
     # results in a good restart and clean screen redrawing.
     # xmonad --restart
-    xdotool key ctrl+alt+BackSpace
+    # xdotool key ctrl+alt+BackSpace
+
+    # restart my "desktop environment"
+    ~/bin/xmode
 
     :
 

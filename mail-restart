@@ -1,0 +1,3 @@
+#!/bin/bash
+echo "$(tail ~/.offlineimaplog)" > ~/.offlineimaplog
+sudo systemctl restart offlineimap@es.service

@@ -1,0 +1,6 @@
+#!/bin/bash
+app=$1
+shift
+case $app in
+    photoshop) wine ~/.wine/drive_c/Program\ Files\ \(x86\)/Adobe/Adobe\ Photoshop\ CS2/Photoshop.exe &>/dev/null & ;;
+esac

@@ -50,4 +50,3 @@ xmodmap -e "keysym Tab = Super_L"
 xmodmap -e "keycode $ESCAPE_KEYCODE = $TILDE_MAPPING"
 xmodmap -e "keycode $TILDE_KEYCODE = $TAB_MAPPING"
 OFF
-
