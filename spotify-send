@@ -1,0 +1,44 @@
+#!/bin/bash
+
+# spotify-send       
+# es@ethanschoonover.com / Ethan Schoonover / @ethanschoonover
+
+# send media key to spotify window even if not visible
+# then flash current track via dbus notification
+
+# usage:
+#
+# spotify-send play | spotify-send pause
+# spotify-send prev
+# spotify-send next
+# spotify-send shuffle
+# spotify-send repeat
+# spotify-send [volume] up
+# spotify-send [volume] down
+
+SPOTIFY_NAME="Spotify Premium - Linux Preview"
+NAME_PREFIX="WM_ICON_NAME(COMPOUND_TEXT)"
+SEP=" – "
+
+Flash ()   { notify-send -u low -t 1000 "$*"; }
+SendKey () { xdotool search --name "$SPOTIFY_NAME" key --window %@ $1; }
+
+ShowTrack () {
+    TRACK="$(xprop -name "$SPOTIFY_NAME" \
+           | grep "$NAME_PREFIX" \
+           | sed 's/.*Spotify - \([^"]*\)".*/\1/' \
+           | sed "s/$SEP/ - /")"
+    [[ -n "$TRACK" ]] && Flash "$TRACK"
+    }
+
+case $@ in
+    play|pause) SendKey XF86AudioPlay; ShowTrack ;;
+    next)       SendKey XF86AudioNext; ShowTrack ;;
+    prev)       SendKey XF86AudioPrev; ShowTrack ;;
+    shuffle)    SendKey "ctrl+s"; Flash "Shuffle toggle" ;;
+    repeat)     SendKey "ctrl+r"; Flash "Repeat toggle" ;;
+    *up)        SendKey "ctrl+Up"; Flash "Spotify volume up" ;;
+    *down)      SendKey "ctrl+Down"; Flash "Spotify volume down" ;;
+esac
+
+
