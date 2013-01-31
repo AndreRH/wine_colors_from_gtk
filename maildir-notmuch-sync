@@ -47,9 +47,13 @@
 # Dry-run
 # ----------------------------------------------------------------------
 #
-# Call the script with the intial argument "--dry-run" to test the result
+# Call the script directly from the command line with the intial 
+# argument "--dry-run" to test the result:
 #
 #     maildir-notmuch-sync "--dry-run" "~/var/mail/accounts/personal"
+#
+# Dry-run mode will echo a summary of changes and any deletions, copies
+# but will NOT make any changes
 
 
 # ----------------------------------------------------------------------
@@ -143,7 +147,7 @@ set -o nounset
 case ${1:-} in
     *-h*) echo "usage: mail-index [--dry-run]"; exit; ;;
     *-d*) RUNCMD=echo; DRYRUN=true; DRYRUN_MSG="- DRYRUN (no changes will be made)"; shift; ;;
-    *)    RUNCMD=eval; ;;
+    *)    RUNCMD=eval; DRYRUN=false ;;
 esac
 
 
@@ -332,7 +336,8 @@ NOTMUCH_ROOT="${NOTMUCH_ROOT%/}"
 # passed as a command line argument
 
 # Normalize path by trimming trailing slash, if any
-MAILDIR_ACCOUNT_ROOT="${1%/}"
+# (use eval in case user quoted a path with ~ in it, though they shouldn't have)
+eval "MAILDIR_ACCOUNT_ROOT=${1%/}"
 
 
 # ----------------------------------------------------------------------
@@ -595,18 +600,8 @@ Maildir_State_To_Notmuch__Add_Tags_To_Notmuch ()
     local THIS_NOTMUCH_QUERY="folder:\"$THIS_NOTMUCH_FOLDER\" NOT tag:\"$THIS_NOTMUCH_TAG\""
     local THIS_COUNT="$(notmuch count $THIS_NOTMUCH_QUERY)"
 
-    if $DRYRUN; then
-        #echo "notmuch tag +$THIS_NOTMUCH_TAG -- $THIS_NOTMUCH_QUERY"
-        #local THESE_MESSAGE_IDS_TO_TAG="$(notmuch search --output=messages $THIS_NOTMUCH_QUERY)"
-        #for THIS_MESSAGE_ID in $THESE_MESSAGE_IDS_TO_TAG; do
-        #    $RUNCMD "notmuch tag +\"$THIS_NOTMUCH_TAG\" -- $THIS_MESSAGE_ID"
-        #done
-        [[ $THIS_COUNT > 0 ]] && echo "Tagged $THIS_COUNT messages with \"$THIS_NOTMUCH_TAG\"" || true
-    else
-        notmuch tag +"$THIS_NOTMUCH_TAG" -- $THIS_NOTMUCH_QUERY \
-        && echo "Tagged $THIS_COUNT messages with \"$THIS_NOTMUCH_TAG\"" \
-        || echo -e "WARNING: Failed to tag $THIS_COUNT messages with tag \"$THIS_NOTMUCH_TAG\""
-    fi
+    $DRYRUN || notmuch tag +"$THIS_NOTMUCH_TAG" -- $THIS_NOTMUCH_QUERY
+    [[ $THIS_COUNT > 0 ]] && echo "Tagged $THIS_COUNT messages with \"$THIS_NOTMUCH_TAG\"" || true
 
 }
 
@@ -634,19 +629,8 @@ Maildir_State_To_Notmuch__Remove_Tags_From_Notmuch ()
                               NOT folder:\"$TRASH\""
     local THIS_COUNT="$(notmuch count $THIS_NOTMUCH_QUERY)"
 
-    if $DRYRUN; then
-        #echo "notmuch tag -$THIS_NOTMUCH_TAG -- $THIS_NOTMUCH_QUERY"
-        #local THESE_MESSAGE_IDS_TO_TAG="$(notmuch search --output=messages $THIS_NOTMUCH_QUERY)"
-        #for THIS_MESSAGE_ID in $THESE_MESSAGE_IDS_TO_TAG; do
-        #    echo -n "notmuch tag -\"$THIS_NOTMUCH_TAG\" -- $THIS_MESSAGE_ID"
-        #    echo " ($(echo $(notmuch search --output=tags $THIS_MESSAGE_ID)))"
-        #done
-        [[ $THIS_COUNT > 0 ]] && echo "Untagged $THIS_COUNT messages, removed \"$THIS_NOTMUCH_TAG\"" || true
-    else
-        notmuch tag -"$THIS_NOTMUCH_TAG" -- $THIS_NOTMUCH_QUERY \
-        && echo "Untagged $THIS_COUNT messages, removed \"$THIS_NOTMUCH_TAG\"" \
-        || echo -e "\nWARNING: Failed to untag $THIS_COUNT messages for tag \"$THIS_NOTMUCH_TAG\"\n"
-    fi
+    $DRYRUN || notmuch tag -"$THIS_NOTMUCH_TAG" -- $THIS_NOTMUCH_QUERY
+    [[ $THIS_COUNT > 0 ]] && echo "Untagged $THIS_COUNT messages, removed \"$THIS_NOTMUCH_TAG\"" || true
 
 }
 
@@ -676,7 +660,7 @@ Notmuch_Cleanup ()
 # ----------------------------------------------------------------------
 # ----------------------------------------------------------------------
 
-echo "----------------------------------------------------------------------"
+echo -e "\n----------------------------------------------------------------------"
 echo "$(basename $0) start ${DRYRUN_MSG:-}"
 echo "----------------------------------------------------------------------"
 echo "NOTMUCH ROOT: $NOTMUCH_ROOT"
