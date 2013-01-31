@@ -1,0 +1,2 @@
+#!/bin/bash
+wine .wine/drive_c/Program\ Files\ \(x86\)/Evernote/Evernote/Evernote.exe #&>/dev/null
