@@ -1,3 +1,0 @@
-#!/bin/bash
-ssh-keygen -t rsa -C "es@ethanschoonover.com"
-xclip -sel clip < ~/.ssh/id_rsa.pub

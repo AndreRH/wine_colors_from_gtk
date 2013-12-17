@@ -1,5 +1,0 @@
-#!/bin/bash
-
-
-#polytopes -root -polytope 600-cell -orthographic-3d -orthographic-4d -speed-wz 2.2301 -delay 25664
-polytopes -polytope 600-cell -orthographic-3d -orthographic-4d -speed-wz 2.2301 -delay 25664

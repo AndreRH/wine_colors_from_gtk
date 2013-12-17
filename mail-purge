@@ -1,6 +1,0 @@
-#!/bin/bash
-
-# for every mail tagged INBOX (or *in* INBOX), check each of its labels and refile as necessary
-# into folders. Or REMOVE? from folders? And delete from INBOX if in folder INBOX but no longer tagged INBOX?
-
-# check to make sure that the mail didn't just come in and thus is missing the INBOX tag

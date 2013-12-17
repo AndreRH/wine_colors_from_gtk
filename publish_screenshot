@@ -1,2 +1,0 @@
-#!/bin/bash
-google picasa post 'Screenshots' $1 && rm $1 || echo "image upload failed"

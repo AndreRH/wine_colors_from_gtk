@@ -1,5 +1,0 @@
-#!/bin/bash
-
-[[ -z "$@" ]] && set -- "Oak is strong and also gives shade." || true
-alert "$@"
-echo "$@" | festival --tts
