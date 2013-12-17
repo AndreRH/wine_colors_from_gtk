@@ -1,8 +1,10 @@
-#!/usr/bin/env python2
+#!/usr/bin/python
+# -*- coding: utf-8 -*-
 
 # Scrape colors from GTK and import them into Wine through the registry
 # 
 # endolith@gmail.com 2009-02-06
+# André Hentschel    2013-12-17
 # 
 # Based on script by KillerKiwi [Ubuntu Forums] October 29th, 2007
 # http://ubuntuforums.org/showthread.php?t=55286&page=3#23
@@ -177,9 +179,9 @@ winetemp = os.path.join(wineprefix, 'drive_c','windows','temp')
 f = NamedTemporaryFile(prefix = 'winecolors', suffix = '.reg', dir = winetemp, mode = 'w+')
 f.write("""REGEDIT4
 
-[HKEY_USERS\S-1-5-4\Control Panel]
+[HKEY_CURRENT_USER\Control Panel]
 
-[HKEY_USERS\S-1-5-4\Control Panel\Colors]
+[HKEY_CURRENT_USER\Control Panel\Colors]
 """)
 
 # Alphabetize list (purely so that user.reg is easy to read; Wine doesn't care)
